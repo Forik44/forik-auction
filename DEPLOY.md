@@ -41,6 +41,11 @@ git push -u origin main
 ```
 > `.gitignore` уже настроен: `bin/`, `obj/`, `*.db` и локальные секреты в репозиторий не попадут.
 
+> ВАЖНО: НЕ используйте встроенный в панель «Github Deploy» — он делает `git clone`
+> исходников в `wwwroot` и НЕ собирает .NET (сайт не запустится). Нужен путь через
+> GitHub Actions ниже: GitHub сам делает `dotnet publish` и заливает готовое
+> приложение по WebDeploy. Если «Github Deploy» включён — отключите его (Disabled).
+
 ### Шаг 1. Завести бесплатный сайт на MonsterASP.NET
 1. Зарегистрируйтесь на https://www.monsterasp.net/ (Free hosting, карта не нужна).
 2. В панели создайте **Website** — выдадут адрес вида `https://имя.runasp.net`.
@@ -53,10 +58,10 @@ git push -u origin main
 ### Шаг 2. Добавить секреты в GitHub
 В репозитории: **Settings → Secrets and variables → Actions → New repository secret**.
 Создайте 4 секрета (значения — из шага 1):
-- `MONSTER_WEBSITE_NAME`
-- `MONSTER_SERVER`
-- `MONSTER_USERNAME`
-- `MONSTER_PASSWORD`
+- `WEBSITE_NAME` = `site75556` (имя сайта)
+- `SERVER_COMPUTER_NAME` = `https://site75556.siteasp.net:8172`
+- `SERVER_USERNAME` = `site75556`
+- `SERVER_PASSWORD` = пароль из блока WebDeploy Access (кнопка Show)
 
 Workflow уже лежит в репозитории: `.github/workflows/deploy.yml`. Он на каждый пуш в
 `main` делает: setup .NET 8 → restore → прогон тестов логики → publish → WebDeploy.
