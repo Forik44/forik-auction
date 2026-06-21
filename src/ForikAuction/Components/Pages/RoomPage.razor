@@ -34,7 +34,13 @@ else
     <nav class="tabs">
         <button class="@TabCls("auction")" @onclick='() => _tab="auction"'>Аукцион</button>
         <button class="@TabCls("talents")" @onclick='() => _tab="talents"'>Таланты</button>
-        <button class="@TabCls("quests")" @onclick='() => _tab="quests"'>Квесты@if (_pendingApprovals.Count > 0){<text> <span class="badge">@_pendingApprovals.Count</span></text>}</button>
+        <button class="@TabCls("quests")" @onclick='() => _tab="quests"'>
+            Квесты
+            @if (_pendingApprovals.Count > 0)
+            {
+                <span class="badge">@_pendingApprovals.Count</span>
+            }
+        </button>
         <button class="@TabCls("history")" @onclick='() => _tab="history"'>История</button>
     </nav>
 
