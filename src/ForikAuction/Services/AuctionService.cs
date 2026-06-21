@@ -20,7 +20,7 @@ public class AuctionService
 
         // выполненные квесты, выданные ИМЕННО на этот аукцион
         var questReward = await _db.RoomQuests
-            .Where(q => q.RoomMemberId == member.Id && q.ForAuctionNumber == auctionNumber && q.Completed)
+            .Where(q => q.RoomMemberId == member.Id && q.ForAuctionNumber == auctionNumber && q.Status == QuestApproval.Approved)
             .ToListAsync();
         int rawReward = questReward.Sum(q => QuestCatalog.Get(q.QuestId).PointsReward);
 
@@ -73,12 +73,85 @@ public class AuctionService
             });
     }
 
-    public async Task ToggleQuestAsync(int roomQuestId, bool completed)
+    /// <summary>Игрок отмечает квест выполненным -> отправка на одобрение другим игрокам.
+    /// Если в комнате он один — засчитывается сразу.</summary>
+    public async Task<(bool ok, string message)> SubmitQuestAsync(int roomQuestId, int ownerMemberId)
     {
-        var q = await _db.RoomQuests.FindAsync(roomQuestId);
-        if (q is null || q.Claimed) return; // засчитанное не меняем
-        q.Completed = completed;
+        var rq = await _db.RoomQuests.Include(q => q.Votes)
+            .FirstOrDefaultAsync(q => q.Id == roomQuestId && q.RoomMemberId == ownerMemberId);
+        if (rq is null) return (false, "Квест не найден.");
+        if (rq.Claimed) return (false, "Квест уже засчитан.");
+
+        int roomId = await _db.RoomMembers.Where(m => m.Id == ownerMemberId).Select(m => m.RoomId).FirstAsync();
+        int others = await _db.RoomMembers.CountAsync(m => m.RoomId == roomId && m.Id != ownerMemberId);
+
+        if (rq.Votes.Count > 0) _db.QuestApprovalVotes.RemoveRange(rq.Votes);
+        rq.Status = others == 0 ? QuestApproval.Approved : QuestApproval.Pending;
         await _db.SaveChangesAsync();
+        return (true, others == 0 ? "Засчитано." : "Отправлено на одобрение другим игрокам.");
+    }
+
+    /// <summary>Отозвать заявку (вернуть квест в исходное состояние).</summary>
+    public async Task WithdrawQuestAsync(int roomQuestId, int ownerMemberId)
+    {
+        var rq = await _db.RoomQuests.Include(q => q.Votes)
+            .FirstOrDefaultAsync(q => q.Id == roomQuestId && q.RoomMemberId == ownerMemberId);
+        if (rq is null || rq.Claimed) return;
+        if (rq.Votes.Count > 0) _db.QuestApprovalVotes.RemoveRange(rq.Votes);
+        rq.Status = QuestApproval.Open;
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>Другой игрок голосует за/против. Когда проголосовали все остальные — итог фиксируется.</summary>
+    public async Task<(bool ok, string message)> VoteQuestAsync(int roomQuestId, int voterMemberId, bool approve)
+    {
+        var rq = await _db.RoomQuests.Include(q => q.Votes)
+            .FirstOrDefaultAsync(q => q.Id == roomQuestId);
+        if (rq is null) return (false, "Квест не найден.");
+        if (rq.Status != QuestApproval.Pending) return (false, "Голосование уже завершено.");
+        if (rq.RoomMemberId == voterMemberId) return (false, "Нельзя голосовать за свой квест.");
+
+        var existing = rq.Votes.FirstOrDefault(v => v.VoterRoomMemberId == voterMemberId);
+        if (existing is null)
+            rq.Votes.Add(new QuestApprovalVote { RoomQuestId = rq.Id, VoterRoomMemberId = voterMemberId, Approve = approve });
+        else existing.Approve = approve;
+        await _db.SaveChangesAsync();
+
+        int roomId = await _db.RoomMembers.Where(m => m.Id == rq.RoomMemberId).Select(m => m.RoomId).FirstAsync();
+        var otherIds = await _db.RoomMembers
+            .Where(m => m.RoomId == roomId && m.Id != rq.RoomMemberId).Select(m => m.Id).ToListAsync();
+        var votes = rq.Votes.Where(v => otherIds.Contains(v.VoterRoomMemberId)).ToList();
+        if (otherIds.Count > 0 && votes.Count >= otherIds.Count)
+        {
+            int yes = votes.Count(v => v.Approve), no = votes.Count - yes;
+            rq.Status = yes >= no ? QuestApproval.Approved : QuestApproval.Rejected; // ничья -> доверие
+            await _db.SaveChangesAsync();
+        }
+        return (true, "Голос учтён.");
+    }
+
+    /// <summary>Чужие квесты на одобрение, по которым этот игрок ещё не голосовал.</summary>
+    public Task<List<RoomQuest>> PendingForVoterAsync(int roomId, int voterMemberId, int questAuctionNumber) =>
+        _db.RoomQuests
+            .Include(q => q.RoomMember).ThenInclude(m => m.User)
+            .Include(q => q.Votes)
+            .Where(q => q.ForAuctionNumber == questAuctionNumber
+                && q.Status == QuestApproval.Pending
+                && q.RoomMember.RoomId == roomId
+                && q.RoomMemberId != voterMemberId
+                && !q.Votes.Any(v => v.VoterRoomMemberId == voterMemberId))
+            .OrderBy(q => q.Id).ToListAsync();
+
+    /// <summary>Есть ли в комнате неразрешённые заявки на одобрение (блокируют прокрутку).</summary>
+    public Task<bool> HasPendingApprovalsAsync(int roomId, int questAuctionNumber) =>
+        _db.RoomQuests.AnyAsync(q => q.ForAuctionNumber == questAuctionNumber
+            && q.Status == QuestApproval.Pending && q.RoomMember.RoomId == roomId);
+
+    public async Task<bool> HasPendingApprovalsForAuctionAsync(int auctionId)
+    {
+        var a = await _db.Auctions.Include(x => x.Room).FirstOrDefaultAsync(x => x.Id == auctionId);
+        if (a is null) return false;
+        return await HasPendingApprovalsAsync(a.RoomId, a.Room.CurrentAuctionNumber + 1);
     }
 
     // ---------- Ставки ----------
@@ -208,6 +281,7 @@ public class AuctionService
         var rq = await _db.RoomQuests.FindAsync(roomQuestId);
         if (rq is null || rq.RoomMemberId != roomMemberId) return (false, "Квест не найден.");
         if (rq.Claimed) return (false, "Этот квест уже засчитан.");
+        if (rq.Status != QuestApproval.Open) return (false, "Сначала отмените отправку на одобрение.");
 
         var member = await _db.RoomMembers.Include(m => m.Talents)
             .FirstOrDefaultAsync(m => m.Id == roomMemberId);
@@ -228,7 +302,7 @@ public class AuctionService
 
         var pick = pool[new Random().Next(pool.Count)];
         rq.QuestId = pick.Id;
-        rq.Completed = false;
+        rq.Status = QuestApproval.Open;
         member.QuestRerollsUsed++;
         await _db.SaveChangesAsync();
         return (true, $"Квест заменён ({member.QuestRerollsUsed}/{allowed}).");

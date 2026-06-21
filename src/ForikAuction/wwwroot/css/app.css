@@ -146,3 +146,18 @@ hr{border:none;border-top:1px solid var(--line);margin:18px 0}
 
 /* контент выше декора */
 .app-shell{position:relative;z-index:2}
+
+/* ===== Одобрение квестов ===== */
+.q-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1}
+.q-owner{font-weight:700;color:#a5b4fc}
+.q-state{font-size:12px;padding:2px 8px;border-radius:8px;white-space:nowrap}
+.q-state.pending{color:var(--warn);background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.4)}
+.q-state.ok{color:var(--ok);background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.4)}
+.q-state.rej{color:var(--err);background:rgba(251,113,133,.12);border:1px solid rgba(251,113,133,.4)}
+.badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:10px;background:var(--primary);
+  color:#fff;font-size:12px;font-weight:700;text-align:center;vertical-align:middle}
+.approvals{margin-top:16px;border-color:var(--warn);box-shadow:0 0 22px rgba(251,191,36,.15)}
+.btn.ok-btn{background:rgba(52,211,153,.18);border-color:var(--ok);color:#bdf3dd}
+.btn.ok-btn:hover{background:rgba(52,211,153,.3)}
+.btn.rej-btn{background:rgba(251,113,133,.16);border-color:var(--err);color:#ffd2da}
+.btn.rej-btn:hover{background:rgba(251,113,133,.28)}

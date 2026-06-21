@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<Auction> Auctions => Set<Auction>();
     public DbSet<AuctionEntry> AuctionEntries => Set<AuctionEntry>();
     public DbSet<RoomQuest> RoomQuests => Set<RoomQuest>();
+    public DbSet<QuestApprovalVote> QuestApprovalVotes => Set<QuestApprovalVote>();
     public DbSet<PointsLedgerEntry> PointsLedger => Set<PointsLedgerEntry>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -32,6 +33,12 @@ public class AppDbContext : DbContext
 
         b.Entity<UserTalent>()
             .HasIndex(t => new { t.RoomMemberId, t.Code }).IsUnique();
+
+        b.Entity<QuestApprovalVote>()
+            .HasIndex(v => new { v.RoomQuestId, v.VoterRoomMemberId }).IsUnique();
+        b.Entity<QuestApprovalVote>()
+            .HasOne(v => v.RoomQuest).WithMany(q => q.Votes)
+            .HasForeignKey(v => v.RoomQuestId).OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<AuctionEntry>()
             .HasOne(e => e.Auction).WithMany(a => a.Entries)

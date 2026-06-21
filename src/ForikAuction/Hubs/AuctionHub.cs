@@ -34,6 +34,13 @@ public class AuctionHub : Hub
         var segs = await _auctions.BuildSegmentsAsync(auctionId);
         if (segs.Count < 2) return; // крутить можно минимум при двух ставках
 
+        // нельзя крутить, пока есть неотвеченные заявки на одобрение квестов
+        if (await _auctions.HasPendingApprovalsForAuctionAsync(auctionId))
+        {
+            await Clients.Caller.SendAsync("SpinBlocked", "Есть квесты, ожидающие одобрения игроками. Дождитесь голосов.");
+            return;
+        }
+
         var result = await _auctions.ComputeWheelAsync(auctionId);
         var byId = segs.ToDictionary(s => s.EntryId);
 

@@ -34,7 +34,7 @@ else
     <nav class="tabs">
         <button class="@TabCls("auction")" @onclick='() => _tab="auction"'>Аукцион</button>
         <button class="@TabCls("talents")" @onclick='() => _tab="talents"'>Таланты</button>
-        <button class="@TabCls("quests")" @onclick='() => _tab="quests"'>Квесты</button>
+        <button class="@TabCls("quests")" @onclick='() => _tab="quests"'>Квесты@if (_pendingApprovals.Count > 0){<text> <span class="badge">@_pendingApprovals.Count</span></text>}</button>
         <button class="@TabCls("history")" @onclick='() => _tab="history"'>История</button>
     </nav>
 
@@ -115,10 +115,18 @@ else
                         </select>
                     </label>
                     <button class="btn primary big" @onclick="StartSpin"
-                            disabled="@(_entries.Count < 2 || _spinning || _finished)">
+                            disabled="@(_entries.Count < 2 || _spinning || _finished || _roomHasPending)">
                         @(_spinning ? "Крутится…" : "Крутить!")
                     </button>
                 </div>
+                @if (_roomHasPending)
+                {
+                    <p class="muted">⏳ Нельзя крутить: есть квесты, ожидающие одобрения игроками.</p>
+                }
+                @if (_spinBlockedMsg is not null)
+                {
+                    <p class="error">@_spinBlockedMsg</p>
+                }
             </section>
         </div>
     };
@@ -167,33 +175,54 @@ else
         <section class="card">
             <h2>Квесты на аукцион #@(_room!.CurrentAuctionNumber + 1)</h2>
             <p class="muted">
-                Выполняй дела из реальной жизни — отметь галочкой. Награда добавится к очкам
-                <b>аукциона #@(_room!.CurrentAuctionNumber + 1)</b> (не текущего).
+                Выполнил дело — нажми «Выполнил», и другие игроки подтвердят. Награда (после одобрения)
+                добавится к очкам <b>аукциона #@(_room!.CurrentAuctionNumber + 1)</b>.
                 @if (MyRerollsLeft() > 0)
                 {
-                    <text> Доступно рероллов: <b>@MyRerollsLeft()</b> (талант «Авантюрист»).</text>
+                    <text> Рероллов: <b>@MyRerollsLeft()</b> (талант «Авантюрист»).</text>
                 }
             </p>
             @if (PendingQuestReward() > 0)
             {
-                <div class="pending-reward">Уже отмечено: <b>+@PendingQuestReward()</b> очков к аукциону #@(_room!.CurrentAuctionNumber + 1)</div>
+                <div class="pending-reward">Одобрено: <b>+@PendingQuestReward()</b> очков к аукциону #@(_room!.CurrentAuctionNumber + 1)</div>
             }
             <ul class="quests">
                 @foreach (var q in _myQuests)
                 {
                     var def = QuestCatalog.Get(q.QuestId);
-                    <li class="@(q.Completed ? "done" : "")">
-                        <label>
-                            <input type="checkbox" checked="@q.Completed"
-                                   @onchange="e => ToggleQuest(q.Id, (bool)e.Value!)" disabled="@q.Claimed" />
+                    <li class="@(q.Status == QuestApproval.Approved ? "done" : "")">
+                        <div class="q-main">
                             <span class="q-cat">@def.Category</span>
                             <span class="q-text">@def.Text</span>
-                        </label>
+                            @switch (q.Status)
+                            {
+                                case QuestApproval.Pending:
+                                    <span class="q-state pending">⏳ Отправлено на одобрение другим игрокам</span>
+                                    break;
+                                case QuestApproval.Approved:
+                                    <span class="q-state ok">✅ Одобрено</span>
+                                    break;
+                                case QuestApproval.Rejected:
+                                    <span class="q-state rej">❌ Отклонено</span>
+                                    break;
+                            }
+                        </div>
                         <span class="q-actions">
                             <span class="q-reward">+@def.PointsReward@(def.TpReward > 0 ? $" · +{def.TpReward} ОТ" : "")</span>
-                            @if (!q.Completed && !q.Claimed && MyRerollsLeft() > 0)
+                            @if (!q.Claimed)
                             {
-                                <button class="btn ghost xs" title="Заменить квест" @onclick="() => Reroll(q.Id)">⟳</button>
+                                if (q.Status == QuestApproval.Open || q.Status == QuestApproval.Rejected)
+                                {
+                                    <button class="btn primary xs" @onclick="() => SubmitQuest(q.Id)">Выполнил</button>
+                                    if (q.Status == QuestApproval.Open && MyRerollsLeft() > 0)
+                                    {
+                                        <button class="btn ghost xs" title="Заменить квест" @onclick="() => Reroll(q.Id)">⟳</button>
+                                    }
+                                }
+                                else if (q.Status == QuestApproval.Pending)
+                                {
+                                    <button class="btn ghost xs" @onclick="() => WithdrawQuest(q.Id)">Отменить</button>
+                                }
                             }
                         </span>
                     </li>
@@ -202,6 +231,31 @@ else
             </ul>
             @if (_questMsg is not null) { <p class="@(_questOk ? "ok" : "error")">@_questMsg</p> }
         </section>
+
+        @if (_pendingApprovals.Count > 0)
+        {
+            <section class="card approvals">
+                <h2>На одобрение от других игроков <span class="badge">@_pendingApprovals.Count</span></h2>
+                <p class="muted">Игрок утверждает, что выполнил квест. Подтверди или отклони. Пока кто-то не ответил — аукцион нельзя крутить.</p>
+                <ul class="quests">
+                    @foreach (var q in _pendingApprovals)
+                    {
+                        var def = QuestCatalog.Get(q.QuestId);
+                        <li>
+                            <div class="q-main">
+                                <span class="q-owner">@q.RoomMember.User.DisplayName</span>
+                                <span class="q-cat">@def.Category</span>
+                                <span class="q-text">@def.Text</span>
+                            </div>
+                            <span class="q-actions">
+                                <button class="btn xs ok-btn" @onclick="() => Vote(q.Id, true)">Согласен</button>
+                                <button class="btn xs rej-btn" @onclick="() => Vote(q.Id, false)">Не согласен</button>
+                            </span>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
     };
 
     // ===================== ВКЛАДКА: ИСТОРИЯ =====================
@@ -272,6 +326,9 @@ else
     private int _bet = 100;
     private int _spinSeconds = 5;
     private bool _spinning, _finished;
+    private List<RoomQuest> _pendingApprovals = new();
+    private bool _roomHasPending;
+    private string? _spinBlockedMsg;
     private string? _betError, _winnerText, _talentMsg;
     private bool _talentOk;
     private string? _questMsg;
@@ -334,6 +391,10 @@ else
 
         _history = await Auctions.HistoryAsync(RoomId);
         _winStats = await Auctions.WinStatsAsync(RoomId);
+
+        int qn = _room.CurrentAuctionNumber + 1;
+        _roomHasPending = await Auctions.HasPendingApprovalsAsync(RoomId, qn);
+        _pendingApprovals = _myMember is null ? new() : await Auctions.PendingForVoterAsync(RoomId, _myMember.Id, qn);
     }
 
     private double Weight(AuctionEntry e)
@@ -382,10 +443,30 @@ else
         await LoadAsync();
     }
 
-    private async Task ToggleQuest(int roomQuestId, bool completed)
+    private async Task SubmitQuest(int roomQuestId)
     {
-        await Auctions.ToggleQuestAsync(roomQuestId, completed);
+        if (_myMember is null) return;
+        var (ok, msg) = await Auctions.SubmitQuestAsync(roomQuestId, _myMember.Id);
+        _questOk = ok; _questMsg = msg;
         await LoadAsync();
+        await NotifyAndRedraw();
+    }
+
+    private async Task WithdrawQuest(int roomQuestId)
+    {
+        if (_myMember is null) return;
+        await Auctions.WithdrawQuestAsync(roomQuestId, _myMember.Id);
+        await LoadAsync();
+        await NotifyAndRedraw();
+    }
+
+    private async Task Vote(int roomQuestId, bool approve)
+    {
+        if (_myMember is null) return;
+        var (ok, msg) = await Auctions.VoteQuestAsync(roomQuestId, _myMember.Id, approve);
+        _questOk = ok; _questMsg = msg;
+        await LoadAsync();
+        await NotifyAndRedraw();
     }
 
     private TalentLevels MyLevels() => _myMember is null ? new() : TalentResolver.Resolve(_myMember.Talents);
@@ -395,7 +476,7 @@ else
 
     private int PendingQuestReward()
     {
-        int raw = _myQuests.Where(q => q.Completed).Sum(q => QuestCatalog.Get(q.QuestId).PointsReward);
+        int raw = _myQuests.Where(q => q.Status == QuestApproval.Approved).Sum(q => QuestCatalog.Get(q.QuestId).PointsReward);
         return (int)Math.Round(raw * TalentEffects.QuestMultiplier(MyLevels()));
     }
 
@@ -411,6 +492,7 @@ else
     {
         if (_auction is null) return;
         _winnerText = null;
+        _spinBlockedMsg = null;
         _spinning = true;
         await JS.InvokeVoidAsync("wheelInterop.startSpin", RoomId, _auction.Id, _spinSeconds);
     }
@@ -443,6 +525,15 @@ else
 
     [JSInvokable]
     public Task OnSpinStarted() { _spinning = true; return InvokeAsync(StateHasChanged); }
+
+    [JSInvokable]
+    public async Task OnSpinBlocked(string msg)
+    {
+        _spinning = false;
+        _spinBlockedMsg = msg;
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
 
     [JSInvokable]
     public async Task OnSpinFinished(string winnerText)

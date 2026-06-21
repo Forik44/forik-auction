@@ -185,6 +185,7 @@
 
       connection.on('DataChanged', () => { if (dotnet) dotnet.invokeMethodAsync('OnDataChanged'); });
       connection.on('SpinStarted', (plan) => { runPlan(plan); });
+      connection.on('SpinBlocked', (msg) => { if (dotnet) dotnet.invokeMethodAsync('OnSpinBlocked', msg); });
 
       await connection.start();
       await connection.invoke('JoinRoom', roomId);
