@@ -1,0 +1,367 @@
+@page "/room/{RoomId:int}"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject AppDbContext Db
+@inject AuctionService Auctions
+@inject TalentService Talents
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<AuthorizeView>
+<NotAuthorized><p>Войдите, чтобы открыть комнату.</p></NotAuthorized>
+<Authorized>
+
+@if (_room is null)
+{
+    <p>Загрузка…</p>
+}
+else
+{
+    <div class="room-head">
+        <div>
+            <h1>@_room.Name</h1>
+            <span class="muted">Код: <b>@_room.JoinCode</b> · Аукцион #@_room.CurrentAuctionNumber</span>
+        </div>
+        @if (_myMember is not null)
+        {
+            <div class="mybalance">
+                <div><span class="big">@_myAvailable</span><small>мои очки</small></div>
+                <div><span class="big">@_myMember.TalentPoints</span><small>ОТ</small></div>
+            </div>
+        }
+    </div>
+
+    <nav class="tabs">
+        <button class="@TabCls("auction")" @onclick='() => _tab="auction"'>Аукцион</button>
+        <button class="@TabCls("talents")" @onclick='() => _tab="talents"'>Таланты</button>
+        <button class="@TabCls("quests")" @onclick='() => _tab="quests"'>Квесты</button>
+    </nav>
+
+    @if (_tab == "auction") { @AuctionTab }
+    else if (_tab == "talents") { @TalentsTab }
+    else { @QuestsTab }
+}
+
+</Authorized>
+</AuthorizeView>
+
+@* ===================== ВКЛАДКА: АУКЦИОН ===================== *@
+@code {
+    private RenderFragment AuctionTab => __builder =>
+    {
+        <div class="grid two">
+            <section class="card">
+                <h2>Ставки</h2>
+                <div class="bet-form">
+                    <input class="inp" @bind="_anime" placeholder="Название аниме" />
+                    <input class="inp narrow" type="number" min="1" @bind="_bet" placeholder="Очки" />
+                    <button class="btn primary" @onclick="AddEntry" disabled="@(_finished)">Поставить</button>
+                </div>
+                @if (_betError is not null) { <p class="error">@_betError</p> }
+
+                <ul class="entries">
+                    @foreach (var e in _entries)
+                    {
+                        var pct = _totalWeight > 0 ? Weight(e) / _totalWeight * 100 : 0;
+                        <li>
+                            <span class="dot" style="background:@ColorFor(e.Id)"></span>
+                            <span class="anime">@e.AnimeTitle</span>
+                            <span class="owner">@e.RoomMember.User.DisplayName</span>
+                            <span class="pts">@e.Points оч.</span>
+                            <span class="chance">@pct.ToString("0.0")%</span>
+                            @if (_myMember is not null && e.RoomMemberId == _myMember.Id && !_finished)
+                            {
+                                <button class="btn ghost xs" @onclick="() => RemoveEntry(e.Id)">✕</button>
+                            }
+                        </li>
+                    }
+                    @if (_entries.Count == 0) { <li class="muted">Пока нет ставок.</li> }
+                </ul>
+
+                <h3>Игроки</h3>
+                <div class="players">
+                    @foreach (var m in _members)
+                    {
+                        <PlayerCard Name="@m.User.DisplayName" Avatar="@m.User.AvatarUrl"
+                                    Points="@AvailFor(m.Id)" Tp="@m.TalentPoints"
+                                    AuctionNumber="@_room!.CurrentAuctionNumber"
+                                    Color="@MemberColor(m.Id)"
+                                    Ledger="@LedgerFor(m.Id)" Talents="@TalentsFor(m)" />
+                    }
+                </div>
+            </section>
+
+            <section class="card wheel-card">
+                <h2>Колесо</h2>
+                <div class="wheel-wrap">
+                    <div class="pointer">▼</div>
+                    <canvas id="wheelCanvas" width="420" height="420"></canvas>
+                </div>
+
+                @if (_winnerText is not null)
+                {
+                    <div class="winner-banner">🏆 Победитель: <b>@_winnerText</b></div>
+                }
+
+                <div class="spin-controls">
+                    <label>Время прокрутки круга:
+                        <select class="inp narrow" @bind="_spinSeconds">
+                            <option value="3">3 сек</option>
+                            <option value="5">5 сек</option>
+                            <option value="8">8 сек</option>
+                            <option value="12">12 сек</option>
+                        </select>
+                    </label>
+                    <button class="btn primary big" @onclick="StartSpin"
+                            disabled="@(_entries.Count < 2 || _spinning || _finished)">
+                        @(_spinning ? "Крутится…" : "Крутить!")
+                    </button>
+                </div>
+            </section>
+        </div>
+    };
+
+    // ===================== ВКЛАДКА: ТАЛАНТЫ =====================
+    private RenderFragment TalentsTab => __builder =>
+    {
+        <section class="card">
+            <h2>Таланты <span class="muted">(@(_myMember?.TalentPoints ?? 0) ОТ)</span></h2>
+            <p class="muted">ОТ копятся каждый аукцион (+3 всем, +2 проигравшему). Все эффекты действуют <b>только на тебя</b> — соперника не касаются. Стоимость уровней растёт, выгоднее качать вширь.</p>
+            @foreach (var branch in TalentCatalog.All.GroupBy(t => t.Branch))
+            {
+                <h3>@branch.Key</h3>
+                <div class="talents">
+                    @foreach (var def in branch)
+                    {
+                        var lvl = MyLevel(def.Code);
+                        var cost = TalentCatalog.CostForNextLevel(def.Code, lvl);
+                        <div class="talent">
+                            <div class="t-top">
+                                <b>@def.Name</b>
+                                <span class="lvl">ур. @lvl / @def.MaxLevel</span>
+                            </div>
+                            <p class="t-desc">@def.Description</p>
+                            <div class="t-bottom">
+                                @if (cost is null) { <span class="maxed">МАКС</span> }
+                                else
+                                {
+                                    <button class="btn xs" @onclick="() => Buy(def.Code)"
+                                            disabled="@((_myMember?.TalentPoints ?? 0) < cost)">
+                                        Прокачать · @cost ОТ
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            @if (_talentMsg is not null) { <p class="@(_talentOk ? "ok" : "error")">@_talentMsg</p> }
+        </section>
+    };
+
+    // ===================== ВКЛАДКА: КВЕСТЫ =====================
+    private RenderFragment QuestsTab => __builder =>
+    {
+        <section class="card">
+            <h2>Квесты на аукцион #@(_room!.CurrentAuctionNumber + 1)</h2>
+            <p class="muted">Выполняйте дела из реальной жизни — награда добавится к очкам следующего аукциона.</p>
+            <ul class="quests">
+                @foreach (var q in _myQuests)
+                {
+                    var def = QuestCatalog.Get(q.QuestId);
+                    <li class="@(q.Completed ? "done" : "")">
+                        <label>
+                            <input type="checkbox" checked="@q.Completed"
+                                   @onchange="e => ToggleQuest(q.Id, (bool)e.Value!)" disabled="@q.Claimed" />
+                            <span class="q-cat">@def.Category</span>
+                            <span class="q-text">@def.Text</span>
+                        </label>
+                        <span class="q-reward">+@def.PointsReward@(def.TpReward > 0 ? $" · +{def.TpReward} ОТ" : "")</span>
+                    </li>
+                }
+                @if (_myQuests.Count == 0) { <li class="muted">Квесты появятся после старта.</li> }
+            </ul>
+        </section>
+    };
+}
+
+@code {
+    [Parameter] public int RoomId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthTask { get; set; } = default!;
+
+    private Room? _room;
+    private RoomMember? _myMember;
+    private List<RoomMember> _members = new();
+    private Auction? _auction;
+    private List<AuctionEntry> _entries = new();
+    private List<RoomQuest> _myQuests = new();
+    private Dictionary<int, int> _avail = new();
+    private Dictionary<int, List<PointsLedgerEntry>> _ledgers = new();
+    private Dictionary<int, string> _colors = new();
+    private int _myAvailable;
+    private double _totalWeight;
+
+    private string _tab = "auction";
+    private string _anime = "";
+    private int _bet = 100;
+    private int _spinSeconds = 5;
+    private bool _spinning, _finished;
+    private string? _betError, _winnerText, _talentMsg;
+    private bool _talentOk;
+
+    private DotNetObjectReference<RoomPage>? _ref;
+    private int? _userId;
+
+    private string TabCls(string t) => "tab" + (_tab == t ? " active" : "");
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthTask;
+        _userId = state.User.AppUserId();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _room = await Db.Rooms.FindAsync(RoomId);
+        if (_room is null || _userId is null) return;
+
+        _members = await Db.RoomMembers
+            .Include(m => m.User).Include(m => m.Talents)
+            .Where(m => m.RoomId == RoomId).ToListAsync();
+        _myMember = _members.FirstOrDefault(m => m.UserId == _userId);
+
+        _auction = await Auctions.CurrentAuctionAsync(RoomId);
+        _finished = _auction is null || _auction.Status == AuctionStatus.Finished;
+
+        _entries = _auction is null ? new() : await Db.AuctionEntries
+            .Include(e => e.RoomMember).ThenInclude(m => m.User)
+            .Include(e => e.RoomMember).ThenInclude(m => m.Talents)
+            .Where(e => e.AuctionId == _auction.Id).ToListAsync();
+
+        // цвета по индексу ставки
+        _colors = new();
+        var palette = new[]{"#ef4444","#f59e0b","#10b981","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f97316"};
+        for (int i = 0; i < _entries.Count; i++) _colors[_entries[i].Id] = palette[i % palette.Length];
+
+        _totalWeight = _entries.Sum(Weight);
+
+        // доступные очки и разбивка на текущий аукцион
+        _avail = new(); _ledgers = new();
+        foreach (var m in _members)
+        {
+            _avail[m.Id] = await Auctions.AvailablePointsAsync(m.Id, _room.CurrentAuctionNumber);
+            _ledgers[m.Id] = await Auctions.LedgerAsync(m.Id, _room.CurrentAuctionNumber);
+        }
+        _myAvailable = _myMember is null ? 0 : _avail.GetValueOrDefault(_myMember.Id);
+
+        if (_myMember is not null)
+            _myQuests = await Db.RoomQuests
+                .Where(q => q.RoomMemberId == _myMember.Id && q.ForAuctionNumber == _room.CurrentAuctionNumber + 1)
+                .OrderBy(q => q.Id).ToListAsync();
+    }
+
+    private double Weight(AuctionEntry e)
+    {
+        var levels = TalentResolver.Resolve(e.RoomMember.Talents);
+        return TalentEffects.WheelWeight(e.Points, levels);
+    }
+
+    private int AvailFor(int memberId) => _avail.GetValueOrDefault(memberId);
+    private IReadOnlyList<PointsLedgerEntry> LedgerFor(int memberId) =>
+        _ledgers.TryGetValue(memberId, out var l) ? l : Array.Empty<PointsLedgerEntry>();
+    private string ColorFor(int entryId) => _colors.GetValueOrDefault(entryId, "#888");
+    private string MemberColor(int memberId)
+    {
+        var e = _entries.FirstOrDefault(x => x.RoomMemberId == memberId);
+        return e is null ? "#64748b" : ColorFor(e.Id);
+    }
+    private IReadOnlyList<(string, int)> TalentsFor(RoomMember m) =>
+        m.Talents.Select(t => (TalentCatalog.Get(t.Code).Name, t.Level)).ToList();
+    private int MyLevel(string code) => _myMember?.Talents.FirstOrDefault(t => t.Code == code)?.Level ?? 0;
+
+    private async Task AddEntry()
+    {
+        _betError = null;
+        if (_auction is null || _myMember is null) return;
+        var (ok, msg) = await Auctions.SetEntryAsync(_auction.Id, _myMember.Id, _anime, _bet);
+        if (!ok) { _betError = msg; return; }
+        _anime = "";
+        await LoadAsync();
+        await NotifyAndRedraw();
+    }
+
+    private async Task RemoveEntry(int entryId)
+    {
+        if (_myMember is null) return;
+        await Auctions.RemoveEntryAsync(entryId, _myMember.Id);
+        await LoadAsync();
+        await NotifyAndRedraw();
+    }
+
+    private async Task Buy(string code)
+    {
+        if (_myMember is null) return;
+        var (ok, msg) = await Talents.BuyAsync(_myMember.Id, code);
+        _talentOk = ok; _talentMsg = msg;
+        await LoadAsync();
+    }
+
+    private async Task ToggleQuest(int roomQuestId, bool completed)
+    {
+        await Auctions.ToggleQuestAsync(roomQuestId, completed);
+        await LoadAsync();
+    }
+
+    private async Task StartSpin()
+    {
+        if (_auction is null) return;
+        _winnerText = null;
+        _spinning = true;
+        await JS.InvokeVoidAsync("wheelInterop.startSpin", RoomId, _auction.Id, _spinSeconds);
+    }
+
+    // ---- JS interop ----
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (first)
+        {
+            _ref = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("wheelInterop.init", RoomId, _ref);
+        }
+        await JS.InvokeVoidAsync("wheelInterop.drawStatic", _entries
+            .Select(e => new { id = e.Id, label = e.AnimeTitle, weight = Weight(e), color = ColorFor(e.Id) }));
+    }
+
+    private async Task NotifyAndRedraw()
+    {
+        await JS.InvokeVoidAsync("wheelInterop.notifyChanged", RoomId);
+    }
+
+    [JSInvokable]
+    public async Task OnDataChanged()
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+        await JS.InvokeVoidAsync("wheelInterop.drawStatic", _entries
+            .Select(e => new { id = e.Id, label = e.AnimeTitle, weight = Weight(e), color = ColorFor(e.Id) }));
+    }
+
+    [JSInvokable]
+    public Task OnSpinStarted() { _spinning = true; return InvokeAsync(StateHasChanged); }
+
+    [JSInvokable]
+    public async Task OnSpinFinished(string winnerText)
+    {
+        _winnerText = winnerText;
+        _spinning = false;
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("wheelInterop.dispose", RoomId); } catch { }
+        _ref?.Dispose();
+    }
+}

@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="topbar">
+        <a class="brand" href="/">🎡 Аукцион аниме</a>
+        <div class="spacer"></div>
+        <AuthorizeView>
+            <Authorized>
+                <span class="user">@context.User.Identity?.Name</span>
+                <form action="/auth/logout" method="post" style="display:inline">
+                    <button class="btn ghost" type="submit">Выйти</button>
+                </form>
+            </Authorized>
+            <NotAuthorized>
+                <a class="btn primary" href="/auth/login">Войти через Google</a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </header>
+    <main class="content">
+        @Body
+    </main>
+</div>

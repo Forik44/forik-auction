@@ -1,0 +1,41 @@
+@* Карточка игрока со всплывающей подробной разбивкой очков *@
+<div class="player-card">
+    <div class="pc-head" style="border-color:@Color">
+        @if (!string.IsNullOrEmpty(Avatar)) { <img class="pc-ava" src="@Avatar" alt="" /> }
+        <div>
+            <div class="pc-name">@Name</div>
+            <div class="pc-points">@Points очков · @Tp ОТ</div>
+        </div>
+    </div>
+    <div class="pc-pop">
+        <div class="pc-pop-title">Откуда очки (аукцион #@AuctionNumber)</div>
+        <ul class="pc-ledger">
+            @foreach (var s in Ledger)
+            {
+                <li>
+                    <span>@s.Label</span>
+                    <span class="@(s.Delta < 0 ? "neg" : "pos")">@(s.Delta > 0 ? "+" : "")@s.Delta</span>
+                </li>
+            }
+            <li class="pc-total"><span>Итого доступно</span><span>@Points</span></li>
+        </ul>
+        @if (Talents.Count > 0)
+        {
+            <div class="pc-pop-title">Таланты</div>
+            <ul class="pc-talents">
+                @foreach (var t in Talents) { <li>@t.name <b>ур. @t.level</b></li> }
+            </ul>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string? Avatar { get; set; }
+    [Parameter] public int Points { get; set; }
+    [Parameter] public int Tp { get; set; }
+    [Parameter] public int AuctionNumber { get; set; }
+    [Parameter] public string Color { get; set; } = "#3b82f6";
+    [Parameter] public IReadOnlyList<PointsLedgerEntry> Ledger { get; set; } = Array.Empty<PointsLedgerEntry>();
+    [Parameter] public IReadOnlyList<(string name, int level)> Talents { get; set; } = Array.Empty<(string, int)>();
+}

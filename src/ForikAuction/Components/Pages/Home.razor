@@ -1,0 +1,101 @@
+@page "/"
+@rendermode InteractiveServer
+@inject RoomService Rooms
+@inject AppDbContext Db
+@inject NavigationManager Nav
+
+<h1>Аукцион аниме</h1>
+
+<AuthorizeView>
+    <NotAuthorized>
+        <p class="lead">Ставьте очки на аниме, крутите колесо аукциона и качайте таланты.</p>
+        <a class="btn primary big" href="/auth/login">Войти через Google</a>
+    </NotAuthorized>
+    <Authorized>
+        <div class="grid two">
+            <section class="card">
+                <h2>Мои комнаты</h2>
+                @if (_myRooms is null)
+                {
+                    <p>Загрузка…</p>
+                }
+                else if (_myRooms.Count == 0)
+                {
+                    <p class="muted">Пока нет комнат. Создайте новую или зайдите по коду.</p>
+                }
+                else
+                {
+                    <ul class="room-list">
+                        @foreach (var r in _myRooms)
+                        {
+                            <li>
+                                <a href="@($"/room/{r.Id}")"><strong>@r.Name</strong></a>
+                                <span class="code">код: @r.JoinCode</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <section class="card">
+                <h2>Создать комнату</h2>
+                <input class="inp" @bind="_newName" placeholder="Название комнаты" />
+                <input class="inp" type="password" @bind="_newPassword" placeholder="Пароль" />
+                <button class="btn primary" @onclick="CreateRoom" disabled="@_busy">Создать</button>
+
+                <hr />
+
+                <h2>Зайти по коду</h2>
+                <input class="inp" @bind="_joinCode" placeholder="Код комнаты (напр. ABC123)" />
+                <input class="inp" type="password" @bind="_joinPassword" placeholder="Пароль" />
+                <button class="btn" @onclick="JoinRoom" disabled="@_busy">Войти</button>
+
+                @if (_error is not null) { <p class="error">@_error</p> }
+            </section>
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthTask { get; set; } = default!;
+    private int? _userId;
+    private List<Room>? _myRooms;
+    private string _newName = "", _newPassword = "", _joinCode = "", _joinPassword = "";
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthTask;
+        _userId = state.User.AppUserId();
+        if (_userId is not null) _myRooms = await Rooms.MyRoomsAsync(_userId.Value);
+    }
+
+    private async Task CreateRoom()
+    {
+        _error = null;
+        if (_userId is null) return;
+        if (string.IsNullOrWhiteSpace(_newPassword)) { _error = "Введите пароль."; return; }
+        _busy = true;
+        try
+        {
+            var room = await Rooms.CreateRoomAsync(_userId.Value, _newName, _newPassword);
+            Nav.NavigateTo($"/room/{room.Id}");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task JoinRoom()
+    {
+        _error = null;
+        if (_userId is null) return;
+        _busy = true;
+        try
+        {
+            var (ok, msg, room) = await Rooms.JoinRoomAsync(_userId.Value, _joinCode, _joinPassword);
+            if (ok && room is not null) Nav.NavigateTo($"/room/{room.Id}");
+            else _error = msg;
+        }
+        finally { _busy = false; }
+    }
+}

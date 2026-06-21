@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Линкуем чистую игровую логику напрямую, без внешних пакетов (для оффлайн-проверки). -->
+    <Compile Include="../../src/ForikAuction/Game/*.cs" />
+  </ItemGroup>
+</Project>
