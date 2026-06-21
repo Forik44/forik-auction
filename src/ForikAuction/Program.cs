@@ -54,7 +54,7 @@ builder.Services.AddAuthentication(o =>
             else { user.DisplayName = name; user.Email = email; user.AvatarUrl = pic; }
             await db.SaveChangesAsync();
 
-            var id = (ClaimsIdentity)ctx.Principal.Identity!;
+            var id = (ClaimsIdentity)ctx.Principal!.Identity!;
             id.AddClaim(new Claim("app_uid", user.Id.ToString()));
         };
     });

@@ -1,7 +1,6 @@
 # Автодеплой на MonsterASP.NET через WebDeploy.
-# Сборка идёт на серверах GitHub (dotnet publish), затем готовое приложение
-# заливается на хостинг. Значения секретов — из панели MonsterASP.NET, блок
-# "WebDeploy Access" (Settings -> Secrets and variables -> Actions в GitHub).
+# Несекретные значения (имя сайта, адрес сервера, логин) заданы прямо здесь —
+# секретным остаётся только пароль WebDeploy (secrets.SERVER_PASSWORD).
 name: Build, publish and deploy to MonsterASP.NET
 
 on:
@@ -32,7 +31,7 @@ jobs:
       - name: Deploy to MonsterASP.NET via WebDeploy
         uses: rasmusbuchholdt/simply-web-deploy@2.1.0
         with:
-          website-name: ${{ secrets.WEBSITE_NAME }}
-          server-computer-name: ${{ secrets.SERVER_COMPUTER_NAME }}
-          server-username: ${{ secrets.SERVER_USERNAME }}
+          website-name: site75556
+          server-computer-name: https://site75556.siteasp.net:8172
+          server-username: site75556
           server-password: ${{ secrets.SERVER_PASSWORD }}
