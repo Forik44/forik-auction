@@ -1,15 +1,21 @@
 :root{
-  --bg:#0b0e16; --panel:#141a28; --panel2:#1b2333; --line:#2a3346;
-  --text:#e7ecf5; --muted:#8b97ad; --primary:#6366f1; --primary2:#4f46e5;
-  --ok:#22c55e; --err:#ef4444; --warn:#f59e0b;
+  --bg:#15101f; --panel:#1e1730; --panel2:#271d3d; --line:#3a2c54;
+  --text:#f3ecff; --muted:#b3a3d0; --primary:#ff6fae; --primary2:#e84f97;
+  --accent:#a78bfa; --ok:#34d399; --err:#fb7185; --warn:#fbbf24;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+body{margin:0;color:var(--text);font:15px/1.6 Nunito,system-ui,Segoe UI,Roboto,sans-serif;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, #3a1f53 0%, transparent 55%),
+    radial-gradient(900px 500px at 110% 10%, #4a2350 0%, transparent 50%),
+    linear-gradient(180deg,#15101f 0%,#120d1c 100%);
+  background-attachment:fixed;min-height:100vh}
 a{color:#a5b4fc;text-decoration:none}
+h1,h2,.brand,.mybalance .big{font-family:Comfortaa,Nunito,system-ui,sans-serif}
 h1{font-size:26px;margin:0 0 4px} h2{font-size:19px;margin:0 0 12px} h3{font-size:15px;margin:18px 0 8px;color:var(--muted)}
 .app-shell{max-width:1080px;margin:0 auto;padding:0 18px}
 .topbar{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
-.brand{font-weight:700;font-size:18px;color:var(--text)} .spacer{flex:1}
+.brand{font-weight:700;font-size:20px;color:var(--text);text-shadow:0 2px 10px rgba(255,111,174,.35)} .spacer{flex:1}
 .user{color:var(--muted)}
 .content{padding:22px 0}
 .lead{color:var(--muted);font-size:17px;max-width:520px}
@@ -18,7 +24,8 @@ h1{font-size:26px;margin:0 0 4px} h2{font-size:19px;margin:0 0 12px} h3{font-siz
 .btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:9px;
   padding:9px 14px;cursor:pointer;font-size:14px;transition:.15s}
 .btn:hover{border-color:#3d4a63} .btn:disabled{opacity:.45;cursor:not-allowed}
-.btn.primary{background:var(--primary);border-color:var(--primary2)} .btn.primary:hover{background:var(--primary2)}
+.btn.primary{background:linear-gradient(180deg,var(--primary),var(--primary2));border-color:var(--primary2);color:#fff;font-weight:700;box-shadow:0 6px 18px rgba(232,79,151,.35)}
+.btn.primary:hover{filter:brightness(1.07)}
 .btn.ghost{background:transparent} .btn.big{padding:12px 20px;font-size:16px} .btn.xs{padding:4px 8px;font-size:12px}
 
 .inp{width:100%;background:#0d1322;border:1px solid var(--line);border-radius:9px;color:var(--text);
@@ -28,7 +35,7 @@ hr{border:none;border-top:1px solid var(--line);margin:18px 0}
 
 .grid.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 @media(max-width:820px){.grid.two{grid-template-columns:1fr}}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.card{background:linear-gradient(180deg,rgba(40,29,61,.95),rgba(30,23,48,.95));border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:0 8px 30px rgba(0,0,0,.35),0 0 0 1px rgba(167,139,250,.08) inset}
 
 .room-list{list-style:none;padding:0;margin:0}
 .room-list li{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -102,3 +109,40 @@ hr{border:none;border-top:1px solid var(--line);margin:18px 0}
 .history .h-anime{font-weight:600}
 .history .h-owner{color:#a5b4fc;font-size:13px}
 .history .h-date{color:var(--muted);font-size:12px}
+
+/* ===== Аниме-декор ===== */
+.tab.active{border-bottom-color:var(--primary)}
+.winner-banner{background:linear-gradient(90deg,rgba(255,111,174,.18),rgba(167,139,250,.18));
+  border:1px solid var(--primary);box-shadow:0 0 24px rgba(255,111,174,.25);font-family:Comfortaa,sans-serif}
+.wheel-wrap .pointer{color:var(--primary)}
+
+/* падающие лепестки сакуры */
+.sakura{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.sakura .petal{position:absolute;top:-40px;font-size:18px;opacity:.7;animation:fall linear infinite}
+.sakura .petal:nth-child(1){left:5%;animation-duration:11s;animation-delay:0s}
+.sakura .petal:nth-child(2){left:14%;animation-duration:14s;animation-delay:2s;font-size:14px}
+.sakura .petal:nth-child(3){left:23%;animation-duration:9s;animation-delay:1s}
+.sakura .petal:nth-child(4){left:33%;animation-duration:13s;animation-delay:4s;font-size:22px}
+.sakura .petal:nth-child(5){left:42%;animation-duration:10s;animation-delay:3s}
+.sakura .petal:nth-child(6){left:51%;animation-duration:15s;animation-delay:0s;font-size:13px}
+.sakura .petal:nth-child(7){left:60%;animation-duration:12s;animation-delay:5s}
+.sakura .petal:nth-child(8){left:69%;animation-duration:9s;animation-delay:2s;font-size:20px}
+.sakura .petal:nth-child(9){left:78%;animation-duration:14s;animation-delay:1s}
+.sakura .petal:nth-child(10){left:86%;animation-duration:11s;animation-delay:6s;font-size:15px}
+.sakura .petal:nth-child(11){left:92%;animation-duration:13s;animation-delay:3s}
+.sakura .petal:nth-child(12){left:97%;animation-duration:10s;animation-delay:4s;font-size:12px}
+@keyframes fall{
+  0%{transform:translateY(-40px) rotate(0);opacity:0}
+  10%{opacity:.8}
+  100%{transform:translateY(105vh) rotate(360deg);opacity:.2}
+}
+@media (prefers-reduced-motion: reduce){ .sakura{display:none} }
+
+/* маскот в углу */
+.mascot{position:fixed;right:12px;bottom:0;width:120px;height:auto;z-index:1;pointer-events:none;
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.4));animation:bob 4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@media(max-width:900px){ .mascot{width:84px;opacity:.9} }
+
+/* контент выше декора */
+.app-shell{position:relative;z-index:2}

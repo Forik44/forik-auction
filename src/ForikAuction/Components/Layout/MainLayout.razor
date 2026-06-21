@@ -1,8 +1,12 @@
 @inherits LayoutComponentBase
 
+<div class="sakura" aria-hidden="true">
+    @for (int i = 0; i < 12; i++) { <span class="petal">🌸</span> }
+</div>
+
 <div class="app-shell">
     <header class="topbar">
-        <a class="brand" href="/">🎡 Аукцион аниме</a>
+        <a class="brand" href="/">🌸 Аниме-Аукцион</a>
         <div class="spacer"></div>
         <AuthorizeView>
             <Authorized>
@@ -20,3 +24,5 @@
         @Body
     </main>
 </div>
+
+<img class="mascot" src="img/mascot.svg" alt="" aria-hidden="true" />

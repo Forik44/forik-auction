@@ -291,6 +291,10 @@ else
 
     private async Task LoadAsync()
     {
+        // Контекст БД у Blazor Server живёт всю сессию и кэширует сущности. Хаб меняет данные
+        // в своём контексте, поэтому перед чтением сбрасываем кэш — иначе видим устаревшее
+        // (старый номер аукциона, старые очки, «—» в истории).
+        Db.ChangeTracker.Clear();
         _room = await Db.Rooms.FindAsync(RoomId);
         if (_room is null || _userId is null) return;
 

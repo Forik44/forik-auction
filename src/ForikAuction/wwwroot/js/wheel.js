@@ -63,13 +63,18 @@
       g.fill();
       if (s.id === highlightId) { g.lineWidth = 6; g.strokeStyle = '#fff'; g.stroke(); }
       g.globalAlpha = 1;
-      const mid = d2r(start + sweep / 2 + rotation);
+      // радиальная подпись: вдоль радиуса, от центра к краю
+      const a = d2r(start + sweep / 2 + rotation);
       g.save();
-      g.translate(cx + Math.cos(mid) * R * 0.62, cy + Math.sin(mid) * R * 0.62);
-      g.rotate(mid + Math.PI / 2);
-      g.fillStyle = '#fff'; g.font = 'bold 13px system-ui'; g.textAlign = 'center';
-      const label = sweep < 12 ? '' : (s.label.length > 14 ? s.label.slice(0, 13) + '…' : s.label);
-      g.fillText(label, 0, 0);
+      g.translate(cx, cy);
+      g.rotate(a);
+      const flip = Math.cos(a) < 0;            // левая половина — переворачиваем, чтобы читалось
+      if (flip) g.rotate(Math.PI);
+      g.fillStyle = '#fff'; g.font = 'bold 13px system-ui';
+      g.textBaseline = 'middle';
+      g.textAlign = flip ? 'left' : 'right';
+      const label = sweep < 9 ? '' : (s.label.length > 18 ? s.label.slice(0, 17) + '…' : s.label);
+      g.fillText(label, flip ? -(R - 16) : (R - 16), 0);
       g.restore();
       start += sweep;
     }
