@@ -66,13 +66,26 @@ var app = builder.Build();
 // создаём БД при первом старте (для MVP — без миграций)
 using (var scope = app.Services.CreateScope())
 {
+    // SQLite сам не создаёт каталог для файла БД — создадим его, чтобы не падать на хостинге.
+    var cs = builder.Configuration.GetConnectionString("Default");
+    if (!string.IsNullOrWhiteSpace(cs))
+    {
+        var dataSource = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(cs).DataSource;
+        if (!string.IsNullOrWhiteSpace(dataSource))
+        {
+            var fullPath = Path.IsPathRooted(dataSource)
+                ? dataSource
+                : Path.Combine(app.Environment.ContentRootPath, dataSource);
+            var dir = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        }
+    }
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
 }
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
 app.UseHttpsRedirection();
