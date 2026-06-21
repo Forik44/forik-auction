@@ -19,6 +19,7 @@ public static class TalentResolver
             Motivation = L("motivation"),
             Luck       = L("luck"),
             Investor   = L("investor"),
+            Adventurer = L("adventurer"),
         };
     }
 }

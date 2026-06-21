@@ -13,6 +13,7 @@ public sealed class TalentLevels
     public int Motivation;  // "Мотивация": +15% к награде за квесты за уровень
     public int Luck;        // "Фартовый": +3% к весу на колесе за уровень
     public int Investor;    // "Инвестор": конверсия неистраченных очков в ОТ за уровень
+    public int Adventurer;  // "Авантюрист": число рероллов квестов за аукцион
 }
 
 /// <summary>Эффекты талантов в одном месте, чтобы и UI, и расчёты совпадали.</summary>
@@ -30,4 +31,6 @@ public static class TalentEffects
     public static double WheelWeight(int points, TalentLevels t) => points * (1.0 + 0.03 * t.Luck);
     /// <summary>Доля неистраченных очков, которая превращается в очки таланта (ОТ).</summary>
     public static double InvestorRate(TalentLevels t) => t.Investor switch { 0 => 0, 1 => 0.10, 2 => 0.15, _ => 0.20 };
+    /// <summary>Сколько раз за аукцион можно переролльнуть квест.</summary>
+    public static int QuestRerolls(TalentLevels t) => t.Adventurer;
 }

@@ -117,6 +117,11 @@ Console.WriteLine("== TalentCatalog ==");
     Check("WheelWeight: Фартовый x2 даёт +6%", Math.Abs(TalentEffects.WheelWeight(1000, new TalentLevels{Luck=2}) - 1060) < 1e-6);
     Check("QuestCount базово 4", TalentEffects.QuestCount(new TalentLevels()) == 4);
     Check("QuestCount с Пытливый ум x2 = 6", TalentEffects.QuestCount(new TalentLevels{Curiosity=2}) == 6);
+    Check("Талантов в дереве: 8", TalentCatalog.All.Count == 8);
+    Check("Есть талант «Авантюрист»", TalentCatalog.All.Any(t => t.Code == "adventurer"));
+    Check("Авантюрист: рероллов = уровню", TalentEffects.QuestRerolls(new TalentLevels{Adventurer=2}) == 2);
+    Check("Без Авантюриста рероллов нет", TalentEffects.QuestRerolls(new TalentLevels()) == 0);
+    Check("Стоимость Авантюрист ур.1 = 6", TalentCatalog.CostForNextLevel("adventurer", 0) == 6);
 }
 
 Console.WriteLine("== QuestCatalog ==");

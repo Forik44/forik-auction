@@ -35,11 +35,13 @@ else
         <button class="@TabCls("auction")" @onclick='() => _tab="auction"'>Аукцион</button>
         <button class="@TabCls("talents")" @onclick='() => _tab="talents"'>Таланты</button>
         <button class="@TabCls("quests")" @onclick='() => _tab="quests"'>Квесты</button>
+        <button class="@TabCls("history")" @onclick='() => _tab="history"'>История</button>
     </nav>
 
     @if (_tab == "auction") { @AuctionTab }
     else if (_tab == "talents") { @TalentsTab }
-    else { @QuestsTab }
+    else if (_tab == "quests") { @QuestsTab }
+    else { @HistoryTab }
 }
 
 </Authorized>
@@ -164,7 +166,18 @@ else
     {
         <section class="card">
             <h2>Квесты на аукцион #@(_room!.CurrentAuctionNumber + 1)</h2>
-            <p class="muted">Выполняйте дела из реальной жизни — награда добавится к очкам следующего аукциона.</p>
+            <p class="muted">
+                Выполняй дела из реальной жизни — отметь галочкой. Награда добавится к очкам
+                <b>аукциона #@(_room!.CurrentAuctionNumber + 1)</b> (не текущего).
+                @if (MyRerollsLeft() > 0)
+                {
+                    <text> Доступно рероллов: <b>@MyRerollsLeft()</b> (талант «Авантюрист»).</text>
+                }
+            </p>
+            @if (PendingQuestReward() > 0)
+            {
+                <div class="pending-reward">Уже отмечено: <b>+@PendingQuestReward()</b> очков к аукциону #@(_room!.CurrentAuctionNumber + 1)</div>
+            }
             <ul class="quests">
                 @foreach (var q in _myQuests)
                 {
@@ -176,12 +189,63 @@ else
                             <span class="q-cat">@def.Category</span>
                             <span class="q-text">@def.Text</span>
                         </label>
-                        <span class="q-reward">+@def.PointsReward@(def.TpReward > 0 ? $" · +{def.TpReward} ОТ" : "")</span>
+                        <span class="q-actions">
+                            <span class="q-reward">+@def.PointsReward@(def.TpReward > 0 ? $" · +{def.TpReward} ОТ" : "")</span>
+                            @if (!q.Completed && !q.Claimed && MyRerollsLeft() > 0)
+                            {
+                                <button class="btn ghost xs" title="Заменить квест" @onclick="() => Reroll(q.Id)">⟳</button>
+                            }
+                        </span>
                     </li>
                 }
                 @if (_myQuests.Count == 0) { <li class="muted">Квесты появятся после старта.</li> }
             </ul>
+            @if (_questMsg is not null) { <p class="@(_questOk ? "ok" : "error")">@_questMsg</p> }
         </section>
+    };
+
+    // ===================== ВКЛАДКА: ИСТОРИЯ =====================
+    private RenderFragment HistoryTab => __builder =>
+    {
+        <div class="grid two">
+            <section class="card">
+                <h2>Статистика побед</h2>
+                @if (_winStats.Count == 0)
+                {
+                    <p class="muted">Пока нет завершённых аукционов.</p>
+                }
+                else
+                {
+                    <ul class="winstats">
+                        @foreach (var w in _winStats)
+                        {
+                            <li><span>@w.Player</span><b>@w.Wins 🏆</b></li>
+                        }
+                    </ul>
+                }
+            </section>
+            <section class="card">
+                <h2>Прошлые аукционы</h2>
+                @if (_history.Count == 0)
+                {
+                    <p class="muted">История появится после первого розыгрыша.</p>
+                }
+                else
+                {
+                    <ul class="history">
+                        @foreach (var h in _history)
+                        {
+                            <li>
+                                <span class="h-num">#@h.Number</span>
+                                <span class="h-anime">@h.WinnerAnime</span>
+                                <span class="h-owner">@h.WinnerOwner</span>
+                                <span class="h-date">@(h.FinishedUtc?.ToLocalTime().ToString("dd.MM HH:mm") ?? "")</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        </div>
     };
 }
 
@@ -195,6 +259,8 @@ else
     private Auction? _auction;
     private List<AuctionEntry> _entries = new();
     private List<RoomQuest> _myQuests = new();
+    private List<AuctionHistoryItem> _history = new();
+    private List<WinStat> _winStats = new();
     private Dictionary<int, int> _avail = new();
     private Dictionary<int, List<PointsLedgerEntry>> _ledgers = new();
     private Dictionary<int, string> _colors = new();
@@ -208,6 +274,8 @@ else
     private bool _spinning, _finished;
     private string? _betError, _winnerText, _talentMsg;
     private bool _talentOk;
+    private string? _questMsg;
+    private bool _questOk;
 
     private DotNetObjectReference<RoomPage>? _ref;
     private int? _userId;
@@ -259,6 +327,9 @@ else
             _myQuests = await Db.RoomQuests
                 .Where(q => q.RoomMemberId == _myMember.Id && q.ForAuctionNumber == _room.CurrentAuctionNumber + 1)
                 .OrderBy(q => q.Id).ToListAsync();
+
+        _history = await Auctions.HistoryAsync(RoomId);
+        _winStats = await Auctions.WinStatsAsync(RoomId);
     }
 
     private double Weight(AuctionEntry e)
@@ -310,6 +381,25 @@ else
     private async Task ToggleQuest(int roomQuestId, bool completed)
     {
         await Auctions.ToggleQuestAsync(roomQuestId, completed);
+        await LoadAsync();
+    }
+
+    private TalentLevels MyLevels() => _myMember is null ? new() : TalentResolver.Resolve(_myMember.Talents);
+
+    private int MyRerollsLeft() =>
+        _myMember is null ? 0 : Math.Max(0, TalentEffects.QuestRerolls(MyLevels()) - _myMember.QuestRerollsUsed);
+
+    private int PendingQuestReward()
+    {
+        int raw = _myQuests.Where(q => q.Completed).Sum(q => QuestCatalog.Get(q.QuestId).PointsReward);
+        return (int)Math.Round(raw * TalentEffects.QuestMultiplier(MyLevels()));
+    }
+
+    private async Task Reroll(int roomQuestId)
+    {
+        if (_myMember is null) return;
+        var (ok, msg) = await Auctions.RerollQuestAsync(roomQuestId, _myMember.Id);
+        _questOk = ok; _questMsg = msg;
         await LoadAsync();
     }
 

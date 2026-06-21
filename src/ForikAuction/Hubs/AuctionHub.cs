@@ -23,11 +23,16 @@ public class AuctionHub : Hub
     /// <summary>Сообщить комнате, что данные изменились (кто-то поставил ставку и т.п.).</summary>
     public Task NotifyChanged(int roomId) => Clients.Group(Group(roomId)).SendAsync("DataChanged");
 
-    /// <summary>Хост запускает колесо. Сервер считает результат и рассылает всем единый план.</summary>
+    /// <summary>
+    /// Хост запускает колесо. Сервер считает результат, СРАЗУ фиксирует итог в БД
+    /// (начисляет ОТ, открывает следующий аукцион, выдаёт квесты) и рассылает всем единый план
+    /// для анимации. Фиксация на сервере — чтобы итог не зависел от того, доживёт ли клиент
+    /// до конца анимации.
+    /// </summary>
     public async Task StartSpin(int roomId, int auctionId, int spinSeconds)
     {
         var segs = await _auctions.BuildSegmentsAsync(auctionId);
-        if (segs.Count == 0) return;
+        if (segs.Count < 2) return; // крутить можно минимум при двух ставках
 
         var result = await _auctions.ComputeWheelAsync(auctionId);
         var byId = segs.ToDictionary(s => s.EntryId);
@@ -43,13 +48,9 @@ public class AuctionHub : Hub
             auctionId, result.WinnerEntryId, winner.AnimeTitle, winner.OwnerName,
             Math.Clamp(spinSeconds, 2, 15), planSegs, steps);
 
-        await Clients.Group(Group(roomId)).SendAsync("SpinStarted", plan);
-    }
+        // Фиксируем итог на сервере ДО анимации — надёжно.
+        await _auctions.FinishAuctionAsync(auctionId, result.WinnerEntryId);
 
-    /// <summary>Вызывается инициатором после завершения анимации — фиксирует итог.</summary>
-    public async Task FinishSpin(int roomId, int auctionId, int winnerEntryId)
-    {
-        await _auctions.FinishAuctionAsync(auctionId, winnerEntryId);
-        await Clients.Group(Group(roomId)).SendAsync("AuctionFinished", winnerEntryId);
+        await Clients.Group(Group(roomId)).SendAsync("SpinStarted", plan);
     }
 }

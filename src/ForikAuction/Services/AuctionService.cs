@@ -194,10 +194,84 @@ public class AuctionService
             .Where(m => m.RoomId == auction.RoomId).ToListAsync();
         foreach (var m in allMembers)
         {
+            m.QuestRerollsUsed = 0;
             await WriteLedgerForOpenAuctionAsync(m, next);
             await DrawQuestsAsync(m, next + 1);
         }
         await _db.SaveChangesAsync();
+    }
+
+    // ---------- Реролл квеста (талант «Авантюрист») ----------
+
+    public async Task<(bool ok, string message)> RerollQuestAsync(int roomQuestId, int roomMemberId)
+    {
+        var rq = await _db.RoomQuests.FindAsync(roomQuestId);
+        if (rq is null || rq.RoomMemberId != roomMemberId) return (false, "Квест не найден.");
+        if (rq.Claimed) return (false, "Этот квест уже засчитан.");
+
+        var member = await _db.RoomMembers.Include(m => m.Talents)
+            .FirstOrDefaultAsync(m => m.Id == roomMemberId);
+        if (member is null) return (false, "Игрок не найден.");
+
+        var levels = TalentResolver.Resolve(member.Talents);
+        int allowed = TalentEffects.QuestRerolls(levels);
+        if (allowed <= 0) return (false, "Нужен талант «Авантюрист».");
+        if (member.QuestRerollsUsed >= allowed)
+            return (false, $"Рероллы закончились ({member.QuestRerollsUsed}/{allowed}).");
+
+        // выбрать новый квест, которого ещё нет в текущем наборе игрока на этот аукцион
+        var current = await _db.RoomQuests
+            .Where(q => q.RoomMemberId == roomMemberId && q.ForAuctionNumber == rq.ForAuctionNumber)
+            .Select(q => q.QuestId).ToListAsync();
+        var pool = QuestCatalog.All.Where(q => !current.Contains(q.Id)).ToList();
+        if (pool.Count == 0) return (false, "Нет других квестов для замены.");
+
+        var pick = pool[new Random().Next(pool.Count)];
+        rq.QuestId = pick.Id;
+        rq.Completed = false;
+        member.QuestRerollsUsed++;
+        await _db.SaveChangesAsync();
+        return (true, $"Квест заменён ({member.QuestRerollsUsed}/{allowed}).");
+    }
+
+    // ---------- История и статистика ----------
+
+    public async Task<List<AuctionHistoryItem>> HistoryAsync(int roomId)
+    {
+        var finished = await _db.Auctions
+            .Where(a => a.RoomId == roomId && a.Status == AuctionStatus.Finished)
+            .OrderByDescending(a => a.Number)
+            .ToListAsync();
+
+        var result = new List<AuctionHistoryItem>();
+        foreach (var a in finished)
+        {
+            string anime = "—", owner = "—";
+            if (a.WinnerEntryId is int wid)
+            {
+                var e = await _db.AuctionEntries.Include(x => x.RoomMember).ThenInclude(m => m.User)
+                    .FirstOrDefaultAsync(x => x.Id == wid);
+                if (e is not null) { anime = e.AnimeTitle; owner = e.RoomMember.User.DisplayName; }
+            }
+            result.Add(new AuctionHistoryItem(a.Number, anime, owner, a.FinishedUtc));
+        }
+        return result;
+    }
+
+    public async Task<List<WinStat>> WinStatsAsync(int roomId)
+    {
+        var finished = await _db.Auctions
+            .Where(a => a.RoomId == roomId && a.Status == AuctionStatus.Finished && a.WinnerEntryId != null)
+            .Select(a => a.WinnerEntryId!.Value).ToListAsync();
+        if (finished.Count == 0) return new();
+
+        var entries = await _db.AuctionEntries.Include(e => e.RoomMember).ThenInclude(m => m.User)
+            .Where(e => finished.Contains(e.Id)).ToListAsync();
+
+        return entries
+            .GroupBy(e => e.RoomMember.User.DisplayName)
+            .Select(g => new WinStat(g.Key, g.Count()))
+            .OrderByDescending(w => w.Wins).ToList();
     }
 
     public Task<Auction?> CurrentAuctionAsync(int roomId) =>

@@ -16,6 +16,9 @@ public class RoomMember
     public bool WonLast { get; set; }
     public bool LostLast { get; set; }
 
+    /// <summary>Сколько рероллов квестов израсходовано в текущем аукционе (сбрасывается каждый аукцион).</summary>
+    public int QuestRerollsUsed { get; set; }
+
     public DateTime JoinedUtc { get; set; } = DateTime.UtcNow;
 
     public List<UserTalent> Talents { get; set; } = new();
