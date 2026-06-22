@@ -125,12 +125,13 @@ Console.WriteLine("== TalentCatalog ==");
     Check("Меценат: +12 базовых очков за уровень", TalentEffects.PatronBonus(new TalentLevels{Patron=3}) == 36);
     Check("Эндшпиль слабый рано (ур1, аук2) = +4", TalentEffects.EndgameBonus(new TalentLevels{Endgame=1}, 2) == 4);
     Check("Эндшпиль сильный поздно (ур3, аук30) = +180", TalentEffects.EndgameBonus(new TalentLevels{Endgame=3}, 30) == 180);
-    Check("Капитализация почти 0 рано", TalentEffects.InvestorCrystals(1, 1, 1000) == 0);
-    Check("Капитализация растёт поздно (ур3, аук40, 1000) = 24", TalentEffects.InvestorCrystals(3, 40, 1000) == 24);
+    Check("Вклад: без кристаллов нет процентов", TalentEffects.InterestCrystals(2, 0) == 0);
+    Check("Вклад: +6% от 200 (ур2) = 12", TalentEffects.InterestCrystals(2, 200) == 12);
+    Check("Вклад: потолок +30 (ур3, 1000)", TalentEffects.InterestCrystals(3, 1000) == 30);
     Check("QuestCount базово 5", TalentEffects.QuestCount(new TalentLevels()) == 5);
     Check("QuestCount с Пытливый ум x2 = 7", TalentEffects.QuestCount(new TalentLevels{Curiosity=2}) == 7);
     Check("Талантов в дереве: 11", TalentCatalog.All.Count == 11);
-    Check("Есть «Меценат», «Реванш», «Эндшпиль», «Капитализация»",
+    Check("Есть «Меценат», «Реванш», «Эндшпиль», «Вклад»",
         new[]{"patron","comeback","endgame","investor"}.All(c => TalentCatalog.All.Any(t => t.Code == c)));
     Check("Меценат бесконечный: стоимость растёт (6,9,12...)",
         TalentCatalog.CostForNextLevel("patron",0)==6 && TalentCatalog.CostForNextLevel("patron",1)==9 && TalentCatalog.CostForNextLevel("patron",10)==36);

@@ -252,13 +252,9 @@ public class AuctionService
 
             // ОТ: +3 всем участникам, +2 проигравшим (резина), + конвертация неистраченного (Инвестор)
             int tp = 3 + (won ? 0 : 2);
+            // «Вклад»: проценты с накопленных (непотраченных) кристаллов
             if (levels.Investor > 0)
-            {
-                int available = await AvailablePointsAsync(m.Id, auction.Number);
-                int spent = auction.Entries.Where(e => e.RoomMemberId == m.Id).Sum(e => e.Points);
-                int unused = Math.Max(0, available - spent);
-                tp += TalentEffects.InvestorCrystals(levels.Investor, auction.Number, unused);
-            }
+                tp += TalentEffects.InterestCrystals(levels.Investor, m.TalentPoints);
             m.TalentPoints += tp;
         }
 

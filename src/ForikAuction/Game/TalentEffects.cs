@@ -44,12 +44,13 @@ public static class TalentEffects
     }
 
     /// <summary>
-    /// «Капитализация»: сколько кристаллов дать за неистраченные очки в конце аукциона.
-    /// Намеренно слабый в начале и сильный в долгой игре — растёт с номером аукциона.
+    /// «Вклад»: проценты с НЕпотраченных кристаллов в конце аукциона. +3%/+6%/+10% за уровень,
+    /// но не больше +30 за аукцион. Чем больше копишь, тем больше набегает (долгая игра).
     /// </summary>
-    public static int InvestorCrystals(int level, int auctionNumber, int unusedPoints)
+    public static int InterestCrystals(int level, int currentCrystals)
     {
-        if (level <= 0 || unusedPoints <= 0) return 0;
-        return (int)Math.Floor(unusedPoints * (double)level * auctionNumber / 5000.0);
+        if (level <= 0 || currentCrystals <= 0) return 0;
+        double rate = level switch { 1 => 0.03, 2 => 0.06, _ => 0.10 };
+        return Math.Min(30, (int)Math.Floor(currentCrystals * rate));
     }
 }
