@@ -84,13 +84,13 @@
 
   function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
-  function animateTo(segs, fromAngle, toAngle, ms) {
+  function animateTo(segs, fromAngle, toAngle, ms, dimSet) {
     return new Promise(resolve => {
       const t0 = performance.now();
       function frame(now) {
         const t = Math.min(1, (now - t0) / ms);
         const a = fromAngle + (toAngle - fromAngle) * easeOutCubic(t);
-        draw(segs, a, null, null);
+        draw(segs, a, null, dimSet);
         if (t < 1) requestAnimationFrame(frame); else resolve(a % 360);
       }
       requestAnimationFrame(frame);
@@ -174,19 +174,21 @@
   async function runPlan(plan) {
     const byId = {};
     for (const s of plan.segments) byId[s.entryId] = { id: s.entryId, label: s.anime, weight: s.weight, color: s.color };
+    const full = plan.segments.map(s => byId[s.entryId]); // полный круг, не убираем выбывших
+    const shaded = new Set();
     if (dotnet) await dotnet.invokeMethodAsync('OnSpinStarted');
 
     for (const step of plan.steps) {
-      const segs = step.remainingBefore.map(id => byId[id]);
-      await animateTo(segs, 0, step.finalAngleDeg, plan.spinSeconds * 1000);
-      const dim = new Set([step.eliminatedEntryId]);
-      draw(segs, step.finalAngleDeg % 360, step.eliminatedEntryId, dim);
+      await animateTo(full, 0, step.finalAngleDeg, plan.spinSeconds * 1000, shaded);
+      // подсветить выбывшего поверх уже затенённых
+      draw(full, step.finalAngleDeg % 360, step.eliminatedEntryId, shaded);
       const el = byId[step.eliminatedEntryId];
       await flyOut('❌ ' + el.label + ' — ' + el.owner, el.color);
+      shaded.add(step.eliminatedEntryId); // остаётся на колесе, но затенён
     }
 
     const winner = byId[plan.winnerEntryId];
-    draw([winner], 0, winner.id, null);
+    draw([winner], 0, winner.id, null); // победитель — крупно на весь круг
     celebrate();
 
     const winnerText = `${plan.winnerAnime} (${plan.winnerOwner})`;

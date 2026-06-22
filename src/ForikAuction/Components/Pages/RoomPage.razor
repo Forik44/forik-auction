@@ -4,6 +4,7 @@
 @inject AppDbContext Db
 @inject AuctionService Auctions
 @inject TalentService Talents
+@inject RoomService Rooms
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -21,6 +22,10 @@ else
         <div>
             <h1>@_room.Name</h1>
             <span class="muted">Код: <b>@_room.JoinCode</b> · Аукцион #@_room.CurrentAuctionNumber</span>
+            @if (!_isOwner)
+            {
+                <div><button class="btn ghost xs" @onclick="LeaveRoom">Выйти из комнаты</button></div>
+            }
         </div>
         @if (_myMember is not null)
         {
@@ -65,6 +70,7 @@ else
                     <input class="inp narrow" type="number" min="1" @bind="_bet" placeholder="Очки" />
                     <button class="btn primary" @onclick="AddEntry" disabled="@(_finished)">Поставить</button>
                 </div>
+                <div class="remaining">Осталось очков: <b>@_myRemaining</b> из @_myAvailable</div>
                 @if (_betError is not null) { <p class="error">@_betError</p> }
 
                 <ul class="entries">
@@ -90,11 +96,17 @@ else
                 <div class="players">
                     @foreach (var m in _members)
                     {
-                        <PlayerCard Name="@m.User.DisplayName" Avatar="@m.User.AvatarUrl"
-                                    Points="@AvailFor(m.Id)" Tp="@m.TalentPoints"
-                                    AuctionNumber="@_room!.CurrentAuctionNumber"
-                                    Color="@MemberColor(m.Id)"
-                                    Ledger="@LedgerFor(m.Id)" Talents="@TalentsFor(m)" />
+                        <div class="player-wrap">
+                            <PlayerCard Name="@m.User.DisplayName" Avatar="@m.User.AvatarUrl"
+                                        Points="@AvailFor(m.Id)" Tp="@m.TalentPoints"
+                                        AuctionNumber="@_room!.CurrentAuctionNumber"
+                                        Color="@MemberColor(m.Id)"
+                                        Ledger="@LedgerFor(m.Id)" Talents="@TalentsFor(m)" />
+                            @if (_isOwner && m.UserId != _userId)
+                            {
+                                <button class="btn ghost xs kick" title="Выгнать из комнаты" @onclick="() => Kick(m.Id)">✕</button>
+                            }
+                        </div>
                     }
                 </div>
             </section>
@@ -325,6 +337,8 @@ else
     private Dictionary<int, List<PointsLedgerEntry>> _ledgers = new();
     private Dictionary<int, string> _colors = new();
     private int _myAvailable;
+    private int _myRemaining;
+    private bool _isOwner;
     private double _totalWeight;
 
     private string _tab = "auction";
@@ -365,6 +379,7 @@ else
             .Include(m => m.User).Include(m => m.Talents)
             .Where(m => m.RoomId == RoomId).ToListAsync();
         _myMember = _members.FirstOrDefault(m => m.UserId == _userId);
+        _isOwner = _room.OwnerId == _userId;
 
         _auction = await Auctions.CurrentAuctionAsync(RoomId);
         _finished = _auction is null || _auction.Status == AuctionStatus.Finished;
@@ -373,6 +388,7 @@ else
             .Include(e => e.RoomMember).ThenInclude(m => m.User)
             .Include(e => e.RoomMember).ThenInclude(m => m.Talents)
             .Where(e => e.AuctionId == _auction.Id).ToListAsync();
+        _entries = _entries.OrderByDescending(e => e.Points).ThenBy(e => e.Id).ToList();
 
         // цвета по индексу ставки
         _colors = new();
@@ -389,6 +405,8 @@ else
             _ledgers[m.Id] = await Auctions.LedgerAsync(m.Id, _room.CurrentAuctionNumber);
         }
         _myAvailable = _myMember is null ? 0 : _avail.GetValueOrDefault(_myMember.Id);
+        int myBet = _myMember is null ? 0 : _entries.Where(e => e.RoomMemberId == _myMember.Id).Sum(e => e.Points);
+        _myRemaining = Math.Max(0, _myAvailable - myBet);
 
         if (_myMember is not null)
             _myQuests = await Db.RoomQuests
@@ -429,6 +447,23 @@ else
         var (ok, msg) = await Auctions.SetEntryAsync(_auction.Id, _myMember.Id, _anime, _bet);
         if (!ok) { _betError = msg; return; }
         _anime = "";
+        await LoadAsync();
+        await NotifyAndRedraw();
+    }
+
+    private async Task LeaveRoom()
+    {
+        if (_userId is null) return;
+        var (ok, msg) = await Rooms.LeaveRoomAsync(_userId.Value, RoomId);
+        if (ok) { await NotifyAndRedraw(); Nav.NavigateTo("/"); }
+        else _betError = msg;
+    }
+
+    private async Task Kick(int memberId)
+    {
+        if (_userId is null) return;
+        var (ok, msg) = await Rooms.KickAsync(_userId.Value, RoomId, memberId);
+        if (!ok) _betError = msg;
         await LoadAsync();
         await NotifyAndRedraw();
     }

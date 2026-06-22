@@ -198,6 +198,7 @@ public class AuctionService
             .Include(e => e.RoomMember).ThenInclude(m => m.User)
             .Include(e => e.RoomMember).ThenInclude(m => m.Talents)
             .Where(e => e.AuctionId == auctionId)
+            .OrderByDescending(e => e.Points).ThenBy(e => e.Id)
             .ToListAsync();
 
         var segs = new List<WheelSegment>();
@@ -228,16 +229,22 @@ public class AuctionService
 
         var winnerEntry = auction.Entries.First(e => e.Id == winnerEntryId);
         int winnerMemberId = winnerEntry.RoomMemberId;
+        var participantIds = auction.Entries.Select(e => e.RoomMemberId).Distinct().ToHashSet();
 
-        // участники = у кого были ставки
-        var participants = auction.Entries.Select(e => e.RoomMember).DistinctBy(m => m.Id).ToList();
-        foreach (var m in participants)
+        var allMembers = await _db.RoomMembers
+            .Include(m => m.Talents)
+            .Where(m => m.RoomId == auction.RoomId).ToListAsync();
+
+        // ВАЖНО: сбрасываем бафф/дебафф у ВСЕХ, чтобы +200/-200 не повторялись на аукционах,
+        // где игрок не участвовал. Эффект применяется только по итогу последнего аукциона.
+        foreach (var m in allMembers) { m.WonLast = false; m.LostLast = false; }
+
+        foreach (var m in allMembers.Where(m => participantIds.Contains(m.Id)))
         {
             bool won = m.Id == winnerMemberId;
-            m.WonLast = won;
-            m.LostLast = !won;
+            if (won) m.WonLast = true; else m.LostLast = true;
 
-            // ОТ: +3 всем, +2 проигравшим (резина), + конвертация неистраченного (Инвестор)
+            // ОТ: +3 всем участникам, +2 проигравшим (резина), + конвертация неистраченного (Инвестор)
             int tp = 3 + (won ? 0 : 2);
             var levels = TalentResolver.Resolve(m.Talents);
             double rate = TalentEffects.InvestorRate(levels);
@@ -246,7 +253,7 @@ public class AuctionService
                 int available = await AvailablePointsAsync(m.Id, auction.Number);
                 int spent = auction.Entries.Where(e => e.RoomMemberId == m.Id).Sum(e => e.Points);
                 int unused = Math.Max(0, available - spent);
-                tp += (int)Math.Floor(unused * rate / 10.0); // 10 очков -> доля -> ОТ
+                tp += (int)Math.Floor(unused * rate / 10.0);
             }
             m.TalentPoints += tp;
         }
@@ -255,16 +262,12 @@ public class AuctionService
         auction.WinnerEntryId = winnerEntryId;
         auction.FinishedUtc = DateTime.UtcNow;
 
-        // открыть следующий аукцион
         int next = auction.Number + 1;
         auction.Room.CurrentAuctionNumber = next;
         _db.Auctions.Add(new Auction { RoomId = auction.RoomId, Number = next, Status = AuctionStatus.Open });
         await _db.SaveChangesAsync();
 
         // пересчитать стартовые очки и выдать новый набор квестов
-        var allMembers = await _db.RoomMembers
-            .Include(m => m.Talents)
-            .Where(m => m.RoomId == auction.RoomId).ToListAsync();
         foreach (var m in allMembers)
         {
             m.QuestRerollsUsed = 0;

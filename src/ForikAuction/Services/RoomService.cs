@@ -67,6 +67,41 @@ public class RoomService
         return member;
     }
 
+    public async Task<(bool ok, string message)> LeaveRoomAsync(int userId, int roomId)
+    {
+        var room = await _db.Rooms.FindAsync(roomId);
+        if (room is null) return (false, "Комната не найдена.");
+        if (room.OwnerId == userId) return (false, "Владелец не может выйти из своей комнаты.");
+        var member = await _db.RoomMembers.FirstOrDefaultAsync(m => m.RoomId == roomId && m.UserId == userId);
+        if (member is null) return (false, "Вы не состоите в этой комнате.");
+        await RemoveMemberAsync(member);
+        return (true, "Вы вышли из комнаты.");
+    }
+
+    public async Task<(bool ok, string message)> KickAsync(int ownerUserId, int roomId, int targetMemberId)
+    {
+        var room = await _db.Rooms.FindAsync(roomId);
+        if (room is null) return (false, "Комната не найдена.");
+        if (room.OwnerId != ownerUserId) return (false, "Только владелец может удалять игроков.");
+        var member = await _db.RoomMembers.FirstOrDefaultAsync(m => m.Id == targetMemberId && m.RoomId == roomId);
+        if (member is null) return (false, "Игрок не найден.");
+        if (member.UserId == room.OwnerId) return (false, "Нельзя удалить владельца комнаты.");
+        await RemoveMemberAsync(member);
+        return (true, "Игрок удалён из комнаты.");
+    }
+
+    /// <summary>Удаляет игрока и все его записи (ставки, квесты+голоса, таланты, разбивку очков).</summary>
+    private async Task RemoveMemberAsync(RoomMember member)
+    {
+        await _db.QuestApprovalVotes.Where(v => v.VoterRoomMemberId == member.Id).ExecuteDeleteAsync();
+        await _db.RoomQuests.Where(q => q.RoomMemberId == member.Id).ExecuteDeleteAsync();
+        await _db.AuctionEntries.Where(e => e.RoomMemberId == member.Id).ExecuteDeleteAsync();
+        await _db.UserTalents.Where(t => t.RoomMemberId == member.Id).ExecuteDeleteAsync();
+        await _db.PointsLedger.Where(p => p.RoomMemberId == member.Id).ExecuteDeleteAsync();
+        _db.RoomMembers.Remove(member);
+        await _db.SaveChangesAsync();
+    }
+
     public Task<List<Room>> MyRoomsAsync(int userId) =>
         _db.Rooms.Where(r => r.Members.Any(m => m.UserId == userId))
                  .OrderByDescending(r => r.CreatedUtc).ToListAsync();
