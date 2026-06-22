@@ -6,12 +6,18 @@
 @inject TalentService Talents
 @inject RoomService Rooms
 @inject SpinStateStore Spins
+@inject IWebHostEnvironment Env
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
 <AuthorizeView>
 <NotAuthorized><p>Войдите, чтобы открыть комнату.</p></NotAuthorized>
 <Authorized>
+
+@if (_bgImage is not null)
+{
+    <div class="auction-bg" style="background-image:url('@_bgImage')"></div>
+}
 
 @if (_room is null)
 {
@@ -70,6 +76,7 @@ else
                     <input class="inp" @bind="_anime" placeholder="Название аниме" />
                     <input class="inp narrow" type="number" min="1" @bind="_bet" placeholder="Очки" />
                     <button class="btn primary" @onclick="AddEntry" disabled="@(_finished || _spinning)">Поставить</button>
+                    <button class="btn" @onclick="AddAll" disabled="@(_finished || _spinning || _myRemaining <= 0)" title="Поставить все оставшиеся очки">Ва-банк (@_myRemaining)</button>
                 </div>
                 <div class="remaining">Осталось очков: <b>@_myRemaining</b> из @_myAvailable</div>
                 @if (_betError is not null) { <p class="error">@_betError</p> }
@@ -363,6 +370,7 @@ else
     private string? _spinBlockedMsg;
     private HashSet<int> _eliminated = new();
     private SpinPlan? _pendingResumePlan;
+    private string? _bgImage;
     private string? _betError, _winnerText, _talentMsg;
     private bool _talentOk;
     private string? _questMsg;
@@ -448,12 +456,38 @@ else
                 .Where(q => q.RoomMemberId == _myMember.Id && q.ForAuctionNumber == _room.CurrentAuctionNumber + 1)
                 .OrderBy(q => q.Id).ToListAsync();
 
+        _bgImage = PickBackground(_room.CurrentAuctionNumber);
         _history = await Auctions.HistoryAsync(RoomId);
         _winStats = await Auctions.WinStatsAsync(RoomId);
 
         int qn = _room.CurrentAuctionNumber + 1;
         _roomHasPending = await Auctions.HasPendingApprovalsAsync(RoomId, qn);
         _pendingApprovals = _myMember is null ? new() : await Auctions.PendingForVoterAsync(RoomId, _myMember.Id, qn);
+    }
+
+    private async Task AddAll()
+    {
+        if (_myRemaining <= 0) { _betError = "Очки закончились."; return; }
+        _bet = _myRemaining;
+        await AddEntry();
+    }
+
+    /// <summary>Случайная (но одинаковая у всех) картинка-фон под номер аукциона из wwwroot/img/anime.</summary>
+    private string? PickBackground(int auctionNumber)
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(Env.WebRootPath, "img", "anime");
+            if (!System.IO.Directory.Exists(dir)) return null;
+            var exts = new[] { ".png", ".jpg", ".jpeg", ".webp", ".gif" };
+            var files = System.IO.Directory.GetFiles(dir)
+                .Where(f => exts.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+            if (files.Count == 0) return null;
+            int idx = new Random(auctionNumber).Next(files.Count);
+            return "img/anime/" + Uri.EscapeDataString(System.IO.Path.GetFileName(files[idx]));
+        }
+        catch { return null; }
     }
 
     private double Weight(AuctionEntry e)

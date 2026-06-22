@@ -181,3 +181,9 @@ hr{border:none;border-top:1px solid var(--line);margin:18px 0}
 .entries li.out .anime{text-decoration:line-through;color:var(--muted)}
 .out-tag{font-size:11px;color:var(--err);font-weight:700;background:rgba(251,113,133,.12);
   border:1px solid rgba(251,113,133,.4);border-radius:8px;padding:2px 7px;width:58px;text-align:center}
+
+/* фоновая картинка аукциона (меняется каждый аукцион) */
+.auction-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-size:cover;background-position:center top;opacity:.14;
+  -webkit-mask-image:linear-gradient(to bottom, rgba(0,0,0,.95), rgba(0,0,0,.15) 70%, transparent);
+  mask-image:linear-gradient(to bottom, rgba(0,0,0,.95), rgba(0,0,0,.15) 70%, transparent)}
