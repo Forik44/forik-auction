@@ -25,4 +25,37 @@
     </main>
 </div>
 
-<img class="mascot" src="img/mascot.svg" alt="" aria-hidden="true" />
+@* Маскот: встроенный SVG, зрачки следят за курсором (см. wheel.js) *@
+<svg class="mascot" viewBox="0 0 200 280" aria-hidden="true">
+    <defs>
+        <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#c9a7ff" /><stop offset="1" stop-color="#a07bf0" />
+        </linearGradient>
+        <linearGradient id="dress" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ff9ecb" /><stop offset="1" stop-color="#ff6fae" />
+        </linearGradient>
+    </defs>
+    <path d="M44 120 C20 150 24 230 40 250 L60 240 C48 210 52 150 64 120 Z" fill="url(#hair)" />
+    <path d="M156 120 C180 150 176 230 160 250 L140 240 C152 210 148 150 136 120 Z" fill="url(#hair)" />
+    <path d="M70 196 C66 230 60 262 64 274 L136 274 C140 262 134 230 130 196 Z" fill="url(#dress)" />
+    <rect x="74" y="196" width="52" height="14" rx="7" fill="#ffd1e8" />
+    <rect x="92" y="178" width="16" height="22" rx="7" fill="#ffe7d6" />
+    <ellipse cx="100" cy="132" rx="52" ry="50" fill="#ffe7d6" />
+    <path d="M48 132 C44 78 76 50 100 50 C124 50 156 78 152 132
+             C150 110 138 96 128 100 C130 86 120 82 112 92
+             C110 80 96 80 92 94 C84 84 72 90 74 102 C62 98 50 112 48 132 Z" fill="url(#hair)" />
+    <circle cx="40" cy="96" r="16" fill="url(#hair)" />
+    <circle cx="160" cy="96" r="16" fill="url(#hair)" />
+    <circle cx="40" cy="96" r="7" fill="#ff6fae" />
+    <circle cx="160" cy="96" r="7" fill="#ff6fae" />
+    <ellipse cx="80" cy="138" rx="11" ry="14" fill="#fff" />
+    <ellipse cx="120" cy="138" rx="11" ry="14" fill="#fff" />
+    <g class="pupil"><ellipse cx="81" cy="140" rx="8" ry="11" fill="#7b54d6" /><circle cx="78" cy="135" r="3.2" fill="#fff" /></g>
+    <g class="pupil"><ellipse cx="121" cy="140" rx="8" ry="11" fill="#7b54d6" /><circle cx="118" cy="135" r="3.2" fill="#fff" /></g>
+    <path d="M70 124 q10 -6 20 -1" stroke="#8a6bd1" stroke-width="2.5" fill="none" stroke-linecap="round" />
+    <path d="M110 123 q10 -5 20 1" stroke="#8a6bd1" stroke-width="2.5" fill="none" stroke-linecap="round" />
+    <ellipse cx="66" cy="152" rx="7" ry="4" fill="#ff9ec0" opacity="0.8" />
+    <ellipse cx="134" cy="152" rx="7" ry="4" fill="#ff9ec0" opacity="0.8" />
+    <path d="M94 156 q6 7 12 0" stroke="#e06a96" stroke-width="2.5" fill="none" stroke-linecap="round" />
+    <path d="M150 150 l3 7 7 1 -5 5 1 7 -6 -3 -6 3 1 -7 -5 -5 7 -1 z" fill="#ffd54a" />
+</svg>

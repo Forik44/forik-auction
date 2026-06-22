@@ -228,3 +228,26 @@
     }
   };
 })();
+
+  // Зрачки маскота следят за курсором мыши
+  (function () {
+    let pending = false, mx = 0, my = 0;
+    function apply() {
+      pending = false;
+      const pupils = document.querySelectorAll('.mascot .pupil');
+      if (!pupils.length) return;
+      const max = 3.4; // максимум смещения зрачка (в единицах SVG)
+      pupils.forEach(p => {
+        const r = p.getBoundingClientRect();
+        const ex = r.left + r.width / 2, ey = r.top + r.height / 2;
+        const ang = Math.atan2(my - ey, mx - ex);
+        const dx = (Math.cos(ang) * max).toFixed(2), dy = (Math.sin(ang) * max).toFixed(2);
+        p.setAttribute('transform', 'translate(' + dx + ' ' + dy + ')');
+      });
+    }
+    window.addEventListener('mousemove', e => {
+      mx = e.clientX; my = e.clientY;
+      if (!pending) { pending = true; requestAnimationFrame(apply); }
+    });
+  })();
+

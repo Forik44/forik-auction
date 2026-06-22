@@ -187,3 +187,6 @@ hr{border:none;border-top:1px solid var(--line);margin:18px 0}
   background-size:cover;background-position:center top;opacity:.14;
   -webkit-mask-image:linear-gradient(to bottom, rgba(0,0,0,.95), rgba(0,0,0,.15) 70%, transparent);
   mask-image:linear-gradient(to bottom, rgba(0,0,0,.95), rgba(0,0,0,.15) 70%, transparent)}
+
+/* плавное движение зрачков маскота */
+.mascot .pupil{transition:transform .08s linear}
