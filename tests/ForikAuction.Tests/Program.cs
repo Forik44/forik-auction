@@ -143,7 +143,7 @@ Console.WriteLine("== TalentCatalog ==");
 
 Console.WriteLine("== QuestCatalog ==");
 {
-    Check("Квестов стало 105", QuestCatalog.All.Count == 105);
+    Check("Квестов стало 110", QuestCatalog.All.Count == 110);
     Check("Есть категория «Нелепое»", QuestCatalog.All.Any(q => q.Category == "Нелепое"));
     Check("Все Id уникальны", QuestCatalog.All.Select(q=>q.Id).Distinct().Count() == QuestCatalog.All.Count);
     var rng = new Random(1);
