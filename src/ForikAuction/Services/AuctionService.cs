@@ -28,6 +28,7 @@ public class AuctionService
         {
             Carry = member.Carry,
             CompletedQuestReward = rawReward,
+            AuctionNumber = auctionNumber,
         };
         var breakdown = PointsCalculator.ComputeStartingPoints(levels, input);
 
@@ -204,7 +205,7 @@ public class AuctionService
         foreach (var e in entries)
         {
             var levels = TalentResolver.Resolve(e.RoomMember.Talents);
-            double w = TalentEffects.WheelWeight(e.Points, levels);
+            double w = TalentEffects.WheelWeight(e.Points, levels, e.RoomMember.Carry);
             segs.Add(new WheelSegment(e.Id, e.AnimeTitle, e.RoomMember.User.DisplayName, w));
         }
         return segs;
@@ -251,13 +252,12 @@ public class AuctionService
 
             // ОТ: +3 всем участникам, +2 проигравшим (резина), + конвертация неистраченного (Инвестор)
             int tp = 3 + (won ? 0 : 2);
-            double rate = TalentEffects.InvestorRate(levels);
-            if (rate > 0)
+            if (levels.Investor > 0)
             {
                 int available = await AvailablePointsAsync(m.Id, auction.Number);
                 int spent = auction.Entries.Where(e => e.RoomMemberId == m.Id).Sum(e => e.Points);
                 int unused = Math.Max(0, available - spent);
-                tp += (int)Math.Floor(unused * rate / 10.0);
+                tp += TalentEffects.InvestorCrystals(levels.Investor, auction.Number, unused);
             }
             m.TalentPoints += tp;
         }

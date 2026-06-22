@@ -1,6 +1,6 @@
 // Колесо аукциона: рисование на canvas + синхронизация через SignalR + звук/конфетти.
 (function () {
-  const cx = 210, cy = 210, R = 200;
+  const cx = 260, cy = 260, R = 250;
   let connection = null;
   let dotnet = null;
   let lastSegments = [];
@@ -12,27 +12,22 @@
   }
 
   // Пустое колесо — когда нет ставок или их меньше двух.
-  function drawEmpty(message) {
+  // Пустое, но «настоящее» колесо: ровные приглушённые секторы, обод и центр — без смайликов.
+  function drawEmpty() {
     const g = ctx(); if (!g) return;
-    g.clearRect(0, 0, 420, 420);
-    g.save();
-    g.beginPath();
-    g.setLineDash([10, 10]);
-    g.lineWidth = 3;
-    g.strokeStyle = '#3a4356';
-    g.arc(cx, cy, R, 0, Math.PI * 2);
-    g.stroke();
-    g.setLineDash([]);
-    // центр
-    g.beginPath(); g.arc(cx, cy, 34, 0, Math.PI * 2); g.fillStyle = '#0f1320'; g.fill();
-    g.lineWidth = 3; g.strokeStyle = '#334155'; g.stroke();
-    // текст
-    g.fillStyle = '#8b97ad';
-    g.font = '600 16px system-ui'; g.textAlign = 'center';
-    g.fillText('🎬', cx, cy - 6);
-    g.font = '14px system-ui';
-    wrapText(g, message || 'Пока пусто — добавьте аниме и ставки', cx, cy + 60, 280, 18);
-    g.restore();
+    g.clearRect(0, 0, 2 * cx, 2 * cy);
+    const N = 10;
+    for (let i = 0; i < N; i++) {
+      const a0 = (i / N) * 2 * Math.PI - Math.PI / 2;
+      const a1 = ((i + 1) / N) * 2 * Math.PI - Math.PI / 2;
+      g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a0, a1); g.closePath();
+      g.fillStyle = (i % 2 === 0) ? '#2a2140' : '#231b36';
+      g.fill();
+      g.lineWidth = 2; g.strokeStyle = '#3a2c54'; g.stroke();
+    }
+    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.lineWidth = 4; g.strokeStyle = '#4a3a6b'; g.stroke();
+    g.beginPath(); g.arc(cx, cy, 40, 0, Math.PI * 2); g.fillStyle = '#0f1320'; g.fill();
+    g.lineWidth = 3; g.strokeStyle = '#4a3a6b'; g.stroke();
   }
 
   function wrapText(g, text, x, y, maxWidth, lh) {
@@ -158,14 +153,14 @@
   function flyOut(text, color) {
     return new Promise(resolve => {
       const wrap = document.querySelector('.wheel-wrap');
-      if (!wrap) { setTimeout(resolve, 900); return; }
+      if (!wrap) { setTimeout(resolve, 1400); return; }
       const chip = document.createElement('div');
       chip.className = 'fly-chip';
       chip.textContent = text;
       chip.style.borderColor = color || '#fff';
       wrap.appendChild(chip);
-      requestAnimationFrame(() => requestAnimationFrame(() => chip.classList.add('go')));
-      setTimeout(() => { chip.remove(); resolve(); }, 1150);
+      setTimeout(() => chip.classList.add('go'), 1000);   // подержать на месте, чтобы успеть прочитать
+      setTimeout(() => { chip.remove(); resolve(); }, 2100);
     });
   }
 
@@ -190,6 +185,10 @@
     draw([winner], 0, winner.id, null); // победитель — крупно
     celebrate();
 
+    // фиксируем итог на сервере (идемпотентно) и показываем победителя
+    if (connection && plan._roomId != null) {
+      try { await connection.invoke('FinalizeSpin', plan._roomId, plan.auctionId); } catch (e) {}
+    }
     const winnerText = `${plan.winnerAnime} (${plan.winnerOwner})`;
     if (dotnet) await dotnet.invokeMethodAsync('OnSpinFinished', winnerText);
   }
@@ -201,7 +200,7 @@
         .withUrl('/hubs/auction').withAutomaticReconnect().build();
 
       connection.on('DataChanged', () => { if (dotnet) dotnet.invokeMethodAsync('OnDataChanged'); });
-      connection.on('SpinStarted', (plan) => { runPlan(plan); });
+      connection.on('SpinStarted', (plan) => { plan._roomId = roomId; runPlan(plan); });
       connection.on('SpinBlocked', (msg) => { if (dotnet) dotnet.invokeMethodAsync('OnSpinBlocked', msg); });
 
       await connection.start();
@@ -214,6 +213,11 @@
     },
     async startSpin(roomId, auctionId, seconds) {
       if (connection) await connection.invoke('StartSpin', roomId, auctionId, seconds);
+    },
+    // возобновление анимации при заходе/обновлении страницы во время прокрутки
+    resumeSpin(plan, roomId) {
+      plan._roomId = roomId;
+      runPlan(plan);
     },
     async notifyChanged(roomId) {
       if (connection) await connection.invoke('NotifyChanged', roomId);

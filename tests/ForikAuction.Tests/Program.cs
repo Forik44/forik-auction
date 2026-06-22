@@ -120,9 +120,20 @@ Console.WriteLine("== TalentCatalog ==");
     Check("Стоимость растёт", TalentCatalog.CostForNextLevel("capital", 1) == 5);
     Check("На максимуме нет след. уровня", TalentCatalog.CostForNextLevel("capital", 5) == null);
     Check("WheelWeight: Фартовый x2 даёт +6%", Math.Abs(TalentEffects.WheelWeight(1000, new TalentLevels{Luck=2}) - 1060) < 1e-6);
-    Check("QuestCount базово 4", TalentEffects.QuestCount(new TalentLevels()) == 4);
-    Check("QuestCount с Пытливый ум x2 = 6", TalentEffects.QuestCount(new TalentLevels{Curiosity=2}) == 6);
-    Check("Талантов в дереве: 8", TalentCatalog.All.Count == 8);
+    Check("Реванш не работает, пока не отстаёшь (carry<=0)", Math.Abs(TalentEffects.WheelWeight(1000, new TalentLevels{Comeback=2}, -100) - 1000) < 1e-6);
+    Check("Реванш +10% при carry>0 (Comeback x2)", Math.Abs(TalentEffects.WheelWeight(1000, new TalentLevels{Comeback=2}, 200) - 1100) < 1e-6);
+    Check("Меценат: +12 базовых очков за уровень", TalentEffects.PatronBonus(new TalentLevels{Patron=3}) == 36);
+    Check("Эндшпиль слабый рано (ур1, аук2) = +4", TalentEffects.EndgameBonus(new TalentLevels{Endgame=1}, 2) == 4);
+    Check("Эндшпиль сильный поздно (ур3, аук30) = +180", TalentEffects.EndgameBonus(new TalentLevels{Endgame=3}, 30) == 180);
+    Check("Капитализация почти 0 рано", TalentEffects.InvestorCrystals(1, 1, 1000) == 0);
+    Check("Капитализация растёт поздно (ур3, аук40, 1000) = 24", TalentEffects.InvestorCrystals(3, 40, 1000) == 24);
+    Check("QuestCount базово 5", TalentEffects.QuestCount(new TalentLevels()) == 5);
+    Check("QuestCount с Пытливый ум x2 = 7", TalentEffects.QuestCount(new TalentLevels{Curiosity=2}) == 7);
+    Check("Талантов в дереве: 11", TalentCatalog.All.Count == 11);
+    Check("Есть «Меценат», «Реванш», «Эндшпиль», «Капитализация»",
+        new[]{"patron","comeback","endgame","investor"}.All(c => TalentCatalog.All.Any(t => t.Code == c)));
+    Check("Меценат бесконечный: стоимость растёт (6,9,12...)",
+        TalentCatalog.CostForNextLevel("patron",0)==6 && TalentCatalog.CostForNextLevel("patron",1)==9 && TalentCatalog.CostForNextLevel("patron",10)==36);
     Check("Есть талант «Авантюрист»", TalentCatalog.All.Any(t => t.Code == "adventurer"));
     Check("Авантюрист: рероллов = уровню", TalentEffects.QuestRerolls(new TalentLevels{Adventurer=2}) == 2);
     Check("Без Авантюриста рероллов нет", TalentEffects.QuestRerolls(new TalentLevels()) == 0);
@@ -131,7 +142,8 @@ Console.WriteLine("== TalentCatalog ==");
 
 Console.WriteLine("== QuestCatalog ==");
 {
-    Check("Ровно 50 квестов", QuestCatalog.All.Count == 50);
+    Check("Квестов стало 105", QuestCatalog.All.Count == 105);
+    Check("Есть категория «Нелепое»", QuestCatalog.All.Any(q => q.Category == "Нелепое"));
     Check("Все Id уникальны", QuestCatalog.All.Select(q=>q.Id).Distinct().Count() == 50);
     var rng = new Random(1);
     var drawn = QuestCatalog.Draw(4, rng);

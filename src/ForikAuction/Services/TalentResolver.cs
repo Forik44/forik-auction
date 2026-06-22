@@ -13,6 +13,9 @@ public static class TalentResolver
         return new TalentLevels
         {
             Capital    = L("capital"),
+            Patron     = L("patron"),
+            Comeback   = L("comeback"),
+            Endgame    = L("endgame"),
             Stipend    = L("stipend"),
             Nobility   = L("nobility"),
             Curiosity  = L("curiosity"),

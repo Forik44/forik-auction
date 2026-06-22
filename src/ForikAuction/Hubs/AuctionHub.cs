@@ -13,28 +13,28 @@ public class AuctionHub : Hub
     };
 
     private readonly AuctionService _auctions;
-    public AuctionHub(AuctionService auctions) => _auctions = auctions;
+    private readonly SpinStateStore _store;
+    public AuctionHub(AuctionService auctions, SpinStateStore store) { _auctions = auctions; _store = store; }
 
     private static string Group(int roomId) => $"room-{roomId}";
 
     public Task JoinRoom(int roomId) => Groups.AddToGroupAsync(Context.ConnectionId, Group(roomId));
     public Task LeaveRoom(int roomId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, Group(roomId));
 
-    /// <summary>Сообщить комнате, что данные изменились (кто-то поставил ставку и т.п.).</summary>
     public Task NotifyChanged(int roomId) => Clients.Group(Group(roomId)).SendAsync("DataChanged");
 
     /// <summary>
-    /// Хост запускает колесо. Сервер считает результат, СРАЗУ фиксирует итог в БД
-    /// (начисляет ОТ, открывает следующий аукцион, выдаёт квесты) и рассылает всем единый план
-    /// для анимации. Фиксация на сервере — чтобы итог не зависел от того, доживёт ли клиент
-    /// до конца анимации.
+    /// Хост запускает колесо. Сервер считает результат и кладёт план прокрутки в память (аукцион
+    /// при этом ОСТАЁТСЯ открытым — поэтому обновление страницы не спойлерит победителя). Итог
+    /// фиксируется позже, по завершении анимации (FinalizeSpin) или лениво при заходе на страницу.
     /// </summary>
     public async Task StartSpin(int roomId, int auctionId, int spinSeconds)
     {
-        var segs = await _auctions.BuildSegmentsAsync(auctionId);
-        if (segs.Count < 2) return; // крутить можно минимум при двух ставках
+        if (_store.TryGet(auctionId, out _)) return; // уже крутится
 
-        // нельзя крутить, пока есть неотвеченные заявки на одобрение квестов
+        var segs = await _auctions.BuildSegmentsAsync(auctionId);
+        if (segs.Count < 2) return;
+
         if (await _auctions.HasPendingApprovalsForAuctionAsync(auctionId))
         {
             await Clients.Caller.SendAsync("SpinBlocked", "Есть квесты, ожидающие одобрения игроками. Дождитесь голосов.");
@@ -44,8 +44,7 @@ public class AuctionHub : Hub
         var result = await _auctions.ComputeWheelAsync(auctionId);
         var byId = segs.ToDictionary(s => s.EntryId);
 
-        // На колесе размер сектора ОБРАТНО пропорционален очкам (игра на выбывание):
-        // больше очков -> меньше сектор -> меньше шанс быть выбитым.
+        // размер сектора ОБРАТНО пропорционален очкам (игра на выбывание)
         var planSegs = segs.Select((s, i) => new SpinSegment(
             s.EntryId, s.AnimeTitle, s.OwnerName,
             ForikAuction.Game.WheelEngine.EliminationWeight(s.Weight),
@@ -55,13 +54,21 @@ public class AuctionHub : Hub
             new SpinStep(st.EliminatedEntryId, st.RemainingBefore.ToArray(), st.FinalAngleDeg)).ToArray();
 
         var winner = byId[result.WinnerEntryId];
-        var plan = new SpinPlan(
-            auctionId, result.WinnerEntryId, winner.AnimeTitle, winner.OwnerName,
-            Math.Clamp(spinSeconds, 2, 15), planSegs, steps);
+        int sec = Math.Clamp(spinSeconds, 2, 15);
+        var plan = new SpinPlan(auctionId, result.WinnerEntryId, winner.AnimeTitle, winner.OwnerName, sec, planSegs, steps);
 
-        // Фиксируем итог на сервере ДО анимации — надёжно.
-        await _auctions.FinishAuctionAsync(auctionId, result.WinnerEntryId);
+        // ожидаемая длительность всей анимации (для ленивого завершения брошенной прокрутки)
+        int total = (segs.Count - 1) * (sec * 1000 + 2100) + 2500;
+        _store.Set(auctionId, new SpinState { Plan = plan, StartUtc = DateTime.UtcNow, TotalMs = total });
 
         await Clients.Group(Group(roomId)).SendAsync("SpinStarted", plan);
+    }
+
+    /// <summary>Вызывается клиентом по завершении анимации — один раз фиксирует итог.</summary>
+    public async Task FinalizeSpin(int roomId, int auctionId)
+    {
+        if (!_store.TryRemove(auctionId, out var st)) return; // уже завершено кем-то
+        await _auctions.FinishAuctionAsync(auctionId, st.Plan.WinnerEntryId);
+        await Clients.Group(Group(roomId)).SendAsync("DataChanged");
     }
 }

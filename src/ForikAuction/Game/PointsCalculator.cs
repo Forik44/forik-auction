@@ -15,13 +15,10 @@ public sealed class AuctionInput
     public int Carry;
     /// <summary>Сумма базовых наград за одобренные квесты (до множителя «Мотивация»).</summary>
     public int CompletedQuestReward;
+    /// <summary>Номер аукциона — для талантов, растущих со временем («Эндшпиль»).</summary>
+    public int AuctionNumber;
 }
 
-/// <summary>
-/// Считает стартовые очки игрока и ПОЛНУЮ разбивку источников/дебаффов — для аукциона и для
-/// всплывающей карточки игрока. Накопитель Carry копится через аукционы: много побед подряд
-/// уводят счёт вниз (вплоть до 0), серия проигрышей — наоборот вверх.
-/// </summary>
 public static class PointsCalculator
 {
     public static PointsBreakdown ComputeStartingPoints(TalentLevels t, AuctionInput a)
@@ -30,6 +27,12 @@ public static class PointsCalculator
 
         int cap = TalentEffects.CapitalBonus(t);
         if (cap > 0) s.Add(new("capital", $"Талант «Капитал» ×{t.Capital}", cap));
+
+        int patron = TalentEffects.PatronBonus(t);
+        if (patron > 0) s.Add(new("patron", $"Талант «Меценат» ×{t.Patron}", patron));
+
+        int endgame = TalentEffects.EndgameBonus(t, a.AuctionNumber);
+        if (endgame > 0) s.Add(new("endgame", $"Талант «Эндшпиль» ×{t.Endgame} (растёт с аукционом)", endgame));
 
         if (a.Carry != 0)
             s.Add(new("carry", a.Carry > 0 ? "Накоплено за проигрыши" : "Накоплено за победы", a.Carry));

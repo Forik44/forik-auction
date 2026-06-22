@@ -5,6 +5,7 @@
 @inject AuctionService Auctions
 @inject TalentService Talents
 @inject RoomService Rooms
+@inject SpinStateStore Spins
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -31,7 +32,7 @@ else
         {
             <div class="mybalance">
                 <div><span class="big">@_myAvailable</span><small>мои очки</small></div>
-                <div><span class="big">@_myMember.TalentPoints</span><small>ОТ</small></div>
+                <div><span class="big">@_myMember.TalentPoints</span><small>💎 кристаллы</small></div>
             </div>
         }
     </div>
@@ -68,7 +69,7 @@ else
                 <div class="bet-form">
                     <input class="inp" @bind="_anime" placeholder="Название аниме" />
                     <input class="inp narrow" type="number" min="1" @bind="_bet" placeholder="Очки" />
-                    <button class="btn primary" @onclick="AddEntry" disabled="@(_finished)">Поставить</button>
+                    <button class="btn primary" @onclick="AddEntry" disabled="@(_finished || _spinning)">Поставить</button>
                 </div>
                 <div class="remaining">Осталось очков: <b>@_myRemaining</b> из @_myAvailable</div>
                 @if (_betError is not null) { <p class="error">@_betError</p> }
@@ -90,7 +91,7 @@ else
                             {
                                 <span class="chance">@pct.ToString("0.0")%</span>
                             }
-                            @if (_myMember is not null && e.RoomMemberId == _myMember.Id && !_finished)
+                            @if (_myMember is not null && e.RoomMemberId == _myMember.Id && !_finished && !_spinning)
                             {
                                 <button class="btn ghost xs" @onclick="() => RemoveEntry(e.Id)">✕</button>
                             }
@@ -122,8 +123,12 @@ else
                 <h2>Колесо</h2>
                 <div class="wheel-wrap">
                     <div class="pointer">▼</div>
-                    <canvas id="wheelCanvas" width="420" height="420"></canvas>
+                    <canvas id="wheelCanvas" width="520" height="520"></canvas>
                 </div>
+                @if (_entries.Count == 0)
+                {
+                    <p class="muted wheel-hint">Добавьте аниме и ставки слева, чтобы запустить колесо.</p>
+                }
 
                 @if (_winnerText is not null)
                 {
@@ -160,8 +165,8 @@ else
     private RenderFragment TalentsTab => __builder =>
     {
         <section class="card">
-            <h2>Таланты <span class="muted">(@(_myMember?.TalentPoints ?? 0) ОТ)</span></h2>
-            <p class="muted">ОТ копятся каждый аукцион (+3 всем, +2 проигравшему). Все эффекты действуют <b>только на тебя</b> — соперника не касаются. Стоимость уровней растёт, выгоднее качать вширь.</p>
+            <h2>Таланты <span class="muted">(💎 @(_myMember?.TalentPoints ?? 0))</span></h2>
+            <p class="muted">Кристаллы 💎 копятся каждый аукцион (+3 всем, +2 проигравшему). Все эффекты действуют <b>только на тебя</b>. Стоимость уровней растёт — выгоднее качать вширь. «Меценат» можно качать бесконечно.</p>
             @foreach (var branch in TalentCatalog.All.GroupBy(t => t.Branch))
             {
                 <h3>@branch.Key</h3>
@@ -173,7 +178,7 @@ else
                         <div class="talent">
                             <div class="t-top">
                                 <b>@def.Name</b>
-                                <span class="lvl">ур. @lvl / @def.MaxLevel</span>
+                                <span class="lvl">ур. @lvl / @(def.Repeatable ? "∞" : def.MaxLevel.ToString())</span>
                             </div>
                             <p class="t-desc">@def.Description</p>
                             <div class="t-bottom">
@@ -182,7 +187,7 @@ else
                                 {
                                     <button class="btn xs" @onclick="() => Buy(def.Code)"
                                             disabled="@((_myMember?.TalentPoints ?? 0) < cost)">
-                                        Прокачать · @cost ОТ
+                                        Прокачать · @cost 💎
                                     </button>
                                 }
                             </div>
@@ -233,7 +238,7 @@ else
                             }
                         </div>
                         <span class="q-actions">
-                            <span class="q-reward">+@def.PointsReward@(def.TpReward > 0 ? $" · +{def.TpReward} ОТ" : "")</span>
+                            <span class="q-reward">+@def.PointsReward@(def.TpReward > 0 ? $" · +{def.TpReward} 💎" : "")</span>
                             @if (!q.Claimed)
                             {
                                 if (q.Status == QuestApproval.Open || q.Status == QuestApproval.Rejected)
@@ -357,6 +362,7 @@ else
     private bool _roomHasPending;
     private string? _spinBlockedMsg;
     private HashSet<int> _eliminated = new();
+    private SpinPlan? _pendingResumePlan;
     private string? _betError, _winnerText, _talentMsg;
     private bool _talentOk;
     private string? _questMsg;
@@ -390,6 +396,27 @@ else
         _isOwner = _room.OwnerId == _userId;
 
         _auction = await Auctions.CurrentAuctionAsync(RoomId);
+
+        // если по этому аукциону идёт прокрутка — возобновляем анимацию (без спойлера),
+        // а брошенную (просроченную) прокрутку завершаем лениво
+        _pendingResumePlan = null;
+        if (_auction is not null && Spins.TryGet(_auction.Id, out var spin))
+        {
+            double elapsed = (DateTime.UtcNow - spin.StartUtc).TotalMilliseconds;
+            if (elapsed > spin.TotalMs + 3000 && Spins.TryRemove(_auction.Id, out var done))
+            {
+                await Auctions.FinishAuctionAsync(_auction.Id, done.Plan.WinnerEntryId);
+                Db.ChangeTracker.Clear();
+                _room = await Db.Rooms.FindAsync(RoomId);
+                _auction = await Auctions.CurrentAuctionAsync(RoomId);
+            }
+            else
+            {
+                _spinning = true;
+                _pendingResumePlan = spin.Plan;
+            }
+        }
+
         _finished = _auction is null || _auction.Status == AuctionStatus.Finished;
 
         _entries = _auction is null ? new() : await Db.AuctionEntries
@@ -432,7 +459,7 @@ else
     private double Weight(AuctionEntry e)
     {
         var levels = TalentResolver.Resolve(e.RoomMember.Talents);
-        return TalentEffects.WheelWeight(e.Points, levels);
+        return TalentEffects.WheelWeight(e.Points, levels, e.RoomMember.Carry);
     }
 
     private int AvailFor(int memberId) => _avail.GetValueOrDefault(memberId);
@@ -451,7 +478,7 @@ else
     private async Task AddEntry()
     {
         _betError = null;
-        if (_auction is null || _myMember is null) return;
+        if (_auction is null || _myMember is null || _spinning) return;
         var (ok, msg) = await Auctions.SetEntryAsync(_auction.Id, _myMember.Id, _anime, _bet);
         if (!ok) { _betError = msg; return; }
         _anime = "";
@@ -478,7 +505,7 @@ else
 
     private async Task RemoveEntry(int entryId)
     {
-        if (_myMember is null) return;
+        if (_myMember is null || _spinning) return;
         await Auctions.RemoveEntryAsync(entryId, _myMember.Id);
         await LoadAsync();
         await NotifyAndRedraw();
@@ -554,8 +581,18 @@ else
             _ref = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("wheelInterop.init", RoomId, _ref);
         }
-        await JS.InvokeVoidAsync("wheelInterop.drawStatic", _entries
-            .Select(e => new { id = e.Id, label = e.AnimeTitle, weight = 1.0 / Weight(e), color = ColorFor(e.Id) }));
+        if (_pendingResumePlan is not null)
+        {
+            var plan = _pendingResumePlan;
+            _pendingResumePlan = null;
+            await JS.InvokeVoidAsync("wheelInterop.resumeSpin", plan, RoomId);
+            return;
+        }
+        if (!_spinning)
+        {
+            await JS.InvokeVoidAsync("wheelInterop.drawStatic", _entries
+                .Select(e => new { id = e.Id, label = e.AnimeTitle, weight = 1.0 / Weight(e), color = ColorFor(e.Id) }));
+        }
     }
 
     private async Task NotifyAndRedraw()
@@ -566,6 +603,7 @@ else
     [JSInvokable]
     public async Task OnDataChanged()
     {
+        if (_spinning) return; // во время прокрутки игнорируем — анимация сама перезагрузит в конце
         await LoadAsync();
         await InvokeAsync(StateHasChanged);
         await JS.InvokeVoidAsync("wheelInterop.drawStatic", _entries

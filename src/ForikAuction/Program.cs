@@ -23,6 +23,7 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.Configure<Microsoft.AspNetCore.Components.Server.CircuitOptions>(o => o.DetailedErrors = true);
 builder.Services.AddRazorPages();          // для эндпоинтов входа/выхода
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<SpinStateStore>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 
