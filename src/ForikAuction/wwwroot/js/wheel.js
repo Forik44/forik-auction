@@ -174,21 +174,20 @@
   async function runPlan(plan) {
     const byId = {};
     for (const s of plan.segments) byId[s.entryId] = { id: s.entryId, label: s.anime, weight: s.weight, color: s.color };
-    const full = plan.segments.map(s => byId[s.entryId]); // полный круг, не убираем выбывших
-    const shaded = new Set();
     if (dotnet) await dotnet.invokeMethodAsync('OnSpinStarted');
 
     for (const step of plan.steps) {
-      await animateTo(full, 0, step.finalAngleDeg, plan.spinSeconds * 1000, shaded);
-      // подсветить выбывшего поверх уже затенённых
-      draw(full, step.finalAngleDeg % 360, step.eliminatedEntryId, shaded);
+      const segs = step.remainingBefore.map(id => byId[id]); // только оставшиеся — круг сжимается
+      await animateTo(segs, 0, step.finalAngleDeg, plan.spinSeconds * 1000, null);
+      const dim = new Set([step.eliminatedEntryId]);
+      draw(segs, step.finalAngleDeg % 360, step.eliminatedEntryId, dim);
       const el = byId[step.eliminatedEntryId];
+      if (dotnet) await dotnet.invokeMethodAsync('OnEliminated', step.eliminatedEntryId); // затенить в списке
       await flyOut('❌ ' + el.label + ' — ' + el.owner, el.color);
-      shaded.add(step.eliminatedEntryId); // остаётся на колесе, но затенён
     }
 
     const winner = byId[plan.winnerEntryId];
-    draw([winner], 0, winner.id, null); // победитель — крупно на весь круг
+    draw([winner], 0, winner.id, null); // победитель — крупно
     celebrate();
 
     const winnerText = `${plan.winnerAnime} (${plan.winnerOwner})`;

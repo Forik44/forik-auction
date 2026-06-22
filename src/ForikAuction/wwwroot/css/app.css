@@ -175,3 +175,9 @@ hr{border:none;border-top:1px solid var(--line);margin:18px 0}
 .kick:hover{border-color:var(--err);background:rgba(251,113,133,.12)}
 .remaining{color:var(--muted);margin:2px 0 6px;font-size:13px}
 .remaining b{color:var(--text);font-size:15px}
+
+/* выбывшие аниме в списке */
+.entries li.out{opacity:.5}
+.entries li.out .anime{text-decoration:line-through;color:var(--muted)}
+.out-tag{font-size:11px;color:var(--err);font-weight:700;background:rgba(251,113,133,.12);
+  border:1px solid rgba(251,113,133,.4);border-radius:8px;padding:2px 7px;width:58px;text-align:center}

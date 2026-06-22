@@ -47,14 +47,12 @@ public static class WheelEngine
         int winnerId = segments[winnerIdx].EntryId;
 
         var byId = segments.ToDictionary(s => s.EntryId);
-        var allOrder = segments.Select(s => s.EntryId).ToList(); // фиксированная раскладка всего колеса
         var remaining = segments.Select(s => s.EntryId).ToList();
         var steps = new List<EliminationStep>();
 
         // 2. Выбиваем проигравших по одному. Для драматизма: чем меньше вес, тем выше шанс
         // выбыть раньше (фавориты держатся дольше). На итог это не влияет.
-        // Раскладка колеса НЕ меняется — выбывшие остаются на месте (их потом затеняют),
-        // поэтому углы считаем по полному кругу allOrder.
+        // Выбывшие УБИРАЮТСЯ с колеса — каждый круг рисуем только оставшиеся (remaining).
         while (remaining.Count > 1)
         {
             var losers = remaining.Where(id => id != winnerId).ToList();
@@ -62,9 +60,10 @@ public static class WheelEngine
             int li = WeightedPick(inv, rng.NextDouble());
             int eliminatedId = losers[li];
 
+            var before = remaining.ToList();
             int extraSpins = 3 + rng.Next(3); // 3..5 полных оборотов для красоты
-            double angle = AngleForTarget(allOrder, eliminatedId, byId, extraSpins, rng);
-            steps.Add(new EliminationStep(eliminatedId, allOrder, extraSpins, angle));
+            double angle = AngleForTarget(before, eliminatedId, byId, extraSpins, rng);
+            steps.Add(new EliminationStep(eliminatedId, before, extraSpins, angle));
             remaining.Remove(eliminatedId);
         }
 

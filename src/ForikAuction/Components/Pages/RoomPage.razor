@@ -77,12 +77,19 @@ else
                     @foreach (var e in _entries)
                     {
                         var pct = _totalWeight > 0 ? Weight(e) / _totalWeight * 100 : 0;
-                        <li>
+                        <li class="@(_eliminated.Contains(e.Id) ? "out" : "")">
                             <span class="dot" style="background:@ColorFor(e.Id)"></span>
                             <span class="anime">@e.AnimeTitle</span>
                             <span class="owner">@e.RoomMember.User.DisplayName</span>
                             <span class="pts">@e.Points оч.</span>
-                            <span class="chance">@pct.ToString("0.0")%</span>
+                            @if (_eliminated.Contains(e.Id))
+                            {
+                                <span class="out-tag">выбыл</span>
+                            }
+                            else
+                            {
+                                <span class="chance">@pct.ToString("0.0")%</span>
+                            }
                             @if (_myMember is not null && e.RoomMemberId == _myMember.Id && !_finished)
                             {
                                 <button class="btn ghost xs" @onclick="() => RemoveEntry(e.Id)">✕</button>
@@ -349,6 +356,7 @@ else
     private List<RoomQuest> _pendingApprovals = new();
     private bool _roomHasPending;
     private string? _spinBlockedMsg;
+    private HashSet<int> _eliminated = new();
     private string? _betError, _winnerText, _talentMsg;
     private bool _talentOk;
     private string? _questMsg;
@@ -565,7 +573,10 @@ else
     }
 
     [JSInvokable]
-    public Task OnSpinStarted() { _spinning = true; return InvokeAsync(StateHasChanged); }
+    public Task OnSpinStarted() { _spinning = true; _eliminated.Clear(); return InvokeAsync(StateHasChanged); }
+
+    [JSInvokable]
+    public Task OnEliminated(int entryId) { _eliminated.Add(entryId); return InvokeAsync(StateHasChanged); }
 
     [JSInvokable]
     public async Task OnSpinBlocked(string msg)
