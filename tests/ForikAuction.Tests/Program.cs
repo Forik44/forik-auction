@@ -144,7 +144,7 @@ Console.WriteLine("== QuestCatalog ==");
 {
     Check("Квестов стало 105", QuestCatalog.All.Count == 105);
     Check("Есть категория «Нелепое»", QuestCatalog.All.Any(q => q.Category == "Нелепое"));
-    Check("Все Id уникальны", QuestCatalog.All.Select(q=>q.Id).Distinct().Count() == 50);
+    Check("Все Id уникальны", QuestCatalog.All.Select(q=>q.Id).Distinct().Count() == QuestCatalog.All.Count);
     var rng = new Random(1);
     var drawn = QuestCatalog.Draw(4, rng);
     Check("Draw(4) -> 4 квеста", drawn.Count == 4);
