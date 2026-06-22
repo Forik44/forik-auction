@@ -11,15 +11,16 @@ public sealed class PointsBreakdown
 /// <summary>Исходные данные для расчёта стартовых очков игрока на следующий аукцион.</summary>
 public sealed class AuctionInput
 {
-    public bool WonLast;
-    public bool LostLast;
-    /// <summary>Сумма базовых наград за выполненные квесты (до множителя «Мотивация»).</summary>
+    /// <summary>Накопленный за ВСЕ аукционы итог исходов: победы в минус, проигрыши в плюс.</summary>
+    public int Carry;
+    /// <summary>Сумма базовых наград за одобренные квесты (до множителя «Мотивация»).</summary>
     public int CompletedQuestReward;
 }
 
 /// <summary>
-/// Считает стартовые очки игрока и ПОЛНУЮ разбивку источников/дебаффов — это используется
-/// и для самого аукциона, и для всплывающей карточки игрока («почему столько очков»).
+/// Считает стартовые очки игрока и ПОЛНУЮ разбивку источников/дебаффов — для аукциона и для
+/// всплывающей карточки игрока. Накопитель Carry копится через аукционы: много побед подряд
+/// уводят счёт вниз (вплоть до 0), серия проигрышей — наоборот вверх.
 /// </summary>
 public static class PointsCalculator
 {
@@ -30,19 +31,8 @@ public static class PointsCalculator
         int cap = TalentEffects.CapitalBonus(t);
         if (cap > 0) s.Add(new("capital", $"Талант «Капитал» ×{t.Capital}", cap));
 
-        if (a.LostLast)
-            s.Add(new("loss", t.Stipend > 0
-                ? $"Бонус проигравшему (+стипендия ×{t.Stipend})"
-                : "Бонус проигравшему", TalentEffects.LossBonus(t)));
-
-        if (a.WonLast)
-        {
-            int pen = TalentEffects.WinPenalty(t);
-            if (pen > 0)
-                s.Add(new("win", t.Nobility > 0
-                    ? $"Штраф победителю (-благородство ×{t.Nobility})"
-                    : "Штраф победителю", -pen));
-        }
+        if (a.Carry != 0)
+            s.Add(new("carry", a.Carry > 0 ? "Накоплено за проигрыши" : "Накоплено за победы", a.Carry));
 
         if (a.CompletedQuestReward > 0)
         {

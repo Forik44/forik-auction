@@ -88,15 +88,18 @@ Console.WriteLine("== PointsCalculator ==");
     var b0 = PointsCalculator.ComputeStartingPoints(t, new AuctionInput());
     Check("Чистый старт = 1000", b0.Total == 1000);
 
-    var bLoss = PointsCalculator.ComputeStartingPoints(t, new AuctionInput{ LostLast = true });
-    Check("Проигравший = 1200", bLoss.Total == 1200);
+    Check("Накопитель +200 (один проигрыш) = 1200",
+        PointsCalculator.ComputeStartingPoints(t, new AuctionInput{ Carry = 200 }).Total == 1200);
+    Check("Накопитель -200 (одна победа) = 800",
+        PointsCalculator.ComputeStartingPoints(t, new AuctionInput{ Carry = -200 }).Total == 800);
+    Check("Накопитель -400 (две победы подряд) = 600",
+        PointsCalculator.ComputeStartingPoints(t, new AuctionInput{ Carry = -400 }).Total == 600);
+    Check("Глубокий минус клампится в 0",
+        PointsCalculator.ComputeStartingPoints(t, new AuctionInput{ Carry = -1500 }).Total == 0);
 
-    var bWin = PointsCalculator.ComputeStartingPoints(t, new AuctionInput{ WonLast = true });
-    Check("Победитель = 800", bWin.Total == 800);
-
-    var tNob = new TalentLevels{ Nobility = 2 };
-    var bWin2 = PointsCalculator.ComputeStartingPoints(tNob, new AuctionInput{ WonLast = true });
-    Check("Победитель с Благородство x2 = 900 (штраф 100)", bWin2.Total == 900);
+    // эффект талантов теперь применяется при НАКОПЛЕНии (в FinishAuction), проверяем хелперы:
+    Check("Штраф победителя при Благородство x2 = 100", TalentEffects.WinPenalty(new TalentLevels{ Nobility = 2 }) == 100);
+    Check("Бонус проигравшего при Стипендия x1 = 250", TalentEffects.LossBonus(new TalentLevels{ Stipend = 1 }) == 250);
 
     var tCap = new TalentLevels{ Capital = 3 };
     var bCap = PointsCalculator.ComputeStartingPoints(tCap, new AuctionInput());
@@ -107,6 +110,8 @@ Console.WriteLine("== PointsCalculator ==");
     Check("Квесты 100 при Мотивация x2 = 1130 (x1.3)", bQ.Total == 1130);
 
     Check("Разбивка содержит источник base", b0.Sources.Any(x => x.Code == "base"));
+    Check("Накопитель попадает в разбивку как источник carry",
+        PointsCalculator.ComputeStartingPoints(t, new AuctionInput{ Carry = -200 }).Sources.Any(x => x.Code == "carry"));
 }
 
 Console.WriteLine("== TalentCatalog ==");

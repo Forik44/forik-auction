@@ -26,8 +26,7 @@ public class AuctionService
 
         var input = new AuctionInput
         {
-            WonLast = member.WonLast,
-            LostLast = member.LostLast,
+            Carry = member.Carry,
             CompletedQuestReward = rawReward,
         };
         var breakdown = PointsCalculator.ComputeStartingPoints(levels, input);
@@ -244,9 +243,14 @@ public class AuctionService
             bool won = m.Id == winnerMemberId;
             if (won) m.WonLast = true; else m.LostLast = true;
 
+            var levels = TalentResolver.Resolve(m.Talents);
+
+            // накопитель: победа вычитает штраф, проигрыш прибавляет бонус — копится через аукционы
+            if (won) m.Carry -= TalentEffects.WinPenalty(levels);
+            else m.Carry += TalentEffects.LossBonus(levels);
+
             // ОТ: +3 всем участникам, +2 проигравшим (резина), + конвертация неистраченного (Инвестор)
             int tp = 3 + (won ? 0 : 2);
-            var levels = TalentResolver.Resolve(m.Talents);
             double rate = TalentEffects.InvestorRate(levels);
             if (rate > 0)
             {

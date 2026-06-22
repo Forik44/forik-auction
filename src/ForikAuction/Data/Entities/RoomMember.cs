@@ -16,6 +16,10 @@ public class RoomMember
     public bool WonLast { get; set; }
     public bool LostLast { get; set; }
 
+    /// <summary>Накопленный за ВСЕ аукционы итог исходов: победы уводят в минус, проигрыши в плюс.
+    /// Прибавляется к базовым очкам каждый аукцион (может довести счёт до 0).</summary>
+    public int Carry { get; set; }
+
     /// <summary>Сколько рероллов квестов израсходовано в текущем аукционе (сбрасывается каждый аукцион).</summary>
     public int QuestRerollsUsed { get; set; }
 
