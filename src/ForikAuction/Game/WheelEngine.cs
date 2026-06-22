@@ -73,17 +73,23 @@ public static class WheelEngine
     /// Абсолютный угол поворота колеса (град.), чтобы указатель сверху (12 часов) попал внутрь
     /// сектора targetId. Сектора выкладываются по порядку списка order по часовой стрелке от 0.
     /// </summary>
+    /// <summary>
+    /// Вес сектора для ОТОБРАЖЕНИЯ/выбывания: обратно пропорционален очкам. Чем больше очков,
+    /// тем меньше сектор и тем реже указатель на него попадёт (меньше шанс выбыть).
+    /// </summary>
+    public static double EliminationWeight(double pointsWeight) => 1.0 / Math.Max(1e-9, pointsWeight);
+
     public static double AngleForTarget(
         IReadOnlyList<int> order, int targetId,
         IReadOnlyDictionary<int, WheelSegment> byId, int extraSpins, Random rng)
     {
         double total = 0;
-        foreach (var id in order) total += byId[id].Weight;
+        foreach (var id in order) total += EliminationWeight(byId[id].Weight);
 
         double start = 0, tStart = 0, tSweep = 0;
         foreach (var id in order)
         {
-            double sweep = byId[id].Weight / total * 360.0;
+            double sweep = EliminationWeight(byId[id].Weight) / total * 360.0;
             if (id == targetId) { tStart = start; tSweep = sweep; }
             start += sweep;
         }

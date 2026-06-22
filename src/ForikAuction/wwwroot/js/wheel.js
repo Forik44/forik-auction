@@ -154,6 +154,21 @@
     requestAnimationFrame(frame);
   }
 
+  // Показать на секунду, кто выбыл, и «улететь» подписью с колеса.
+  function flyOut(text, color) {
+    return new Promise(resolve => {
+      const wrap = document.querySelector('.wheel-wrap');
+      if (!wrap) { setTimeout(resolve, 900); return; }
+      const chip = document.createElement('div');
+      chip.className = 'fly-chip';
+      chip.textContent = text;
+      chip.style.borderColor = color || '#fff';
+      wrap.appendChild(chip);
+      requestAnimationFrame(() => requestAnimationFrame(() => chip.classList.add('go')));
+      setTimeout(() => { chip.remove(); resolve(); }, 1150);
+    });
+  }
+
   function celebrate() { playFanfare(); launchConfetti(); }
 
   async function runPlan(plan) {
@@ -166,7 +181,8 @@
       await animateTo(segs, 0, step.finalAngleDeg, plan.spinSeconds * 1000);
       const dim = new Set([step.eliminatedEntryId]);
       draw(segs, step.finalAngleDeg % 360, step.eliminatedEntryId, dim);
-      await new Promise(r => setTimeout(r, 700));
+      const el = byId[step.eliminatedEntryId];
+      await flyOut('❌ ' + el.label + ' — ' + el.owner, el.color);
     }
 
     const winner = byId[plan.winnerEntryId];

@@ -512,7 +512,7 @@ else
             await JS.InvokeVoidAsync("wheelInterop.init", RoomId, _ref);
         }
         await JS.InvokeVoidAsync("wheelInterop.drawStatic", _entries
-            .Select(e => new { id = e.Id, label = e.AnimeTitle, weight = Weight(e), color = ColorFor(e.Id) }));
+            .Select(e => new { id = e.Id, label = e.AnimeTitle, weight = 1.0 / Weight(e), color = ColorFor(e.Id) }));
     }
 
     private async Task NotifyAndRedraw()
@@ -526,7 +526,7 @@ else
         await LoadAsync();
         await InvokeAsync(StateHasChanged);
         await JS.InvokeVoidAsync("wheelInterop.drawStatic", _entries
-            .Select(e => new { id = e.Id, label = e.AnimeTitle, weight = Weight(e), color = ColorFor(e.Id) }));
+            .Select(e => new { id = e.Id, label = e.AnimeTitle, weight = 1.0 / Weight(e), color = ColorFor(e.Id) }));
     }
 
     [JSInvokable]

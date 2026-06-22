@@ -44,8 +44,12 @@ public class AuctionHub : Hub
         var result = await _auctions.ComputeWheelAsync(auctionId);
         var byId = segs.ToDictionary(s => s.EntryId);
 
+        // На колесе размер сектора ОБРАТНО пропорционален очкам (игра на выбывание):
+        // больше очков -> меньше сектор -> меньше шанс быть выбитым.
         var planSegs = segs.Select((s, i) => new SpinSegment(
-            s.EntryId, s.AnimeTitle, s.OwnerName, s.Weight, Palette[i % Palette.Length])).ToArray();
+            s.EntryId, s.AnimeTitle, s.OwnerName,
+            ForikAuction.Game.WheelEngine.EliminationWeight(s.Weight),
+            Palette[i % Palette.Length])).ToArray();
 
         var steps = result.Steps.Select(st =>
             new SpinStep(st.EliminatedEntryId, st.RemainingBefore.ToArray(), st.FinalAngleDeg)).ToArray();
