@@ -19,6 +19,8 @@ builder.Services.AddScoped<RoomService>();
 builder.Services.AddScoped<TalentService>();
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+// показывать подробности ошибок circuit'а (на время отладки)
+builder.Services.Configure<Microsoft.AspNetCore.Components.Server.CircuitOptions>(o => o.DetailedErrors = true);
 builder.Services.AddRazorPages();          // для эндпоинтов входа/выхода
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
