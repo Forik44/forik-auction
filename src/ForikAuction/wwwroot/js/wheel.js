@@ -45,7 +45,7 @@
   function draw(segs, rotation, highlightId, dimSet) {
     const g = ctx(); if (!g) return;
     if (!segs || segs.length === 0) { drawEmpty(); return; }
-    g.clearRect(0, 0, 420, 420);
+    g.clearRect(0, 0, 2 * cx, 2 * cy);
     const total = segs.reduce((s, x) => s + x.weight, 0) || 1;
     let start = 0;
     for (const s of segs) {
@@ -53,11 +53,11 @@
       const a0 = d2r(start + rotation), a1 = d2r(start + sweep + rotation);
       g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a0, a1); g.closePath();
       const dim = dimSet && dimSet.has(s.id);
-      g.fillStyle = dim ? '#2b3140' : s.color;
-      g.globalAlpha = dim ? 0.35 : 1;
+      g.fillStyle = dim ? '#241c33' : s.color;   // выбывший — сплошной тёмный, без прозрачности
       g.fill();
+      // граница в цвет заливки, чтобы по краям не оставалось яркого
+      g.lineWidth = 2; g.strokeStyle = dim ? '#241c33' : 'rgba(0,0,0,0.22)'; g.stroke();
       if (s.id === highlightId) { g.lineWidth = 6; g.strokeStyle = '#fff'; g.stroke(); }
-      g.globalAlpha = 1;
       // радиальная подпись: вдоль радиуса, от центра к краю
       const a = d2r(start + sweep / 2 + rotation);
       g.save();
@@ -65,7 +65,7 @@
       g.rotate(a);
       const flip = Math.cos(a) < 0;            // левая половина — переворачиваем, чтобы читалось
       if (flip) g.rotate(Math.PI);
-      g.fillStyle = '#fff'; g.font = 'bold 13px system-ui';
+      g.fillStyle = dim ? '#6b6480' : '#fff'; g.font = 'bold 13px system-ui';
       g.textBaseline = 'middle';
       g.textAlign = flip ? 'left' : 'right';
       const label = sweep < 9 ? '' : (s.label.length > 18 ? s.label.slice(0, 17) + '…' : s.label);
@@ -73,8 +73,8 @@
       g.restore();
       start += sweep;
     }
-    g.beginPath(); g.arc(cx, cy, 32, 0, Math.PI * 2); g.fillStyle = '#0f1320'; g.fill();
-    g.lineWidth = 3; g.strokeStyle = '#334155'; g.stroke();
+    g.beginPath(); g.arc(cx, cy, 40, 0, Math.PI * 2); g.fillStyle = '#0f1320'; g.fill();
+    g.lineWidth = 3; g.strokeStyle = '#4a3a6b'; g.stroke();
   }
 
   function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
@@ -168,14 +168,14 @@
 
   async function runPlan(plan) {
     const byId = {};
-    for (const s of plan.segments) byId[s.entryId] = { id: s.entryId, label: s.anime, weight: s.weight, color: s.color };
+    for (const s of plan.segments) byId[s.entryId] = { id: s.entryId, label: s.anime, owner: s.owner, weight: s.weight, color: s.color };
     if (dotnet) await dotnet.invokeMethodAsync('OnSpinStarted');
 
     for (const step of plan.steps) {
       const segs = step.remainingBefore.map(id => byId[id]); // только оставшиеся — круг сжимается
       await animateTo(segs, 0, step.finalAngleDeg, plan.spinSeconds * 1000, null);
       const dim = new Set([step.eliminatedEntryId]);
-      draw(segs, step.finalAngleDeg % 360, step.eliminatedEntryId, dim);
+      draw(segs, step.finalAngleDeg % 360, null, dim);
       const el = byId[step.eliminatedEntryId];
       if (dotnet) await dotnet.invokeMethodAsync('OnEliminated', step.eliminatedEntryId); // затенить в списке
       await flyOut('❌ ' + el.label + ' — ' + el.owner, el.color);
