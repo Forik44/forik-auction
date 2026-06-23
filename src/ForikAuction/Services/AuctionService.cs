@@ -264,7 +264,19 @@ public class AuctionService
 
         int next = auction.Number + 1;
         auction.Room.CurrentAuctionNumber = next;
-        _db.Auctions.Add(new Auction { RoomId = auction.RoomId, Number = next, Status = AuctionStatus.Open });
+        var nextAuction = new Auction { RoomId = auction.RoomId, Number = next, Status = AuctionStatus.Open };
+        _db.Auctions.Add(nextAuction);
+        await _db.SaveChangesAsync();
+
+        // переносим все ставки, кроме победителя, в новый аукцион (с теми же очками)
+        foreach (var e in auction.Entries.Where(e => e.Id != winnerEntryId))
+            _db.AuctionEntries.Add(new AuctionEntry
+            {
+                AuctionId = nextAuction.Id,
+                RoomMemberId = e.RoomMemberId,
+                AnimeTitle = e.AnimeTitle,
+                Points = e.Points,
+            });
         await _db.SaveChangesAsync();
 
         // пересчитать стартовые очки и выдать новый набор квестов
@@ -349,6 +361,30 @@ public class AuctionService
             .GroupBy(e => e.RoomMember.User.DisplayName)
             .Select(g => new WinStat(g.Key, g.Count()))
             .OrderByDescending(w => w.Wins).ToList();
+    }
+
+    /// <summary>
+    /// Возвращает Id ставок, на которые игроку НЕ хватает очков. У каждого игрока оставляем
+    /// самые дешёвые в пределах его очков, а самые дорогие сверх бюджета помечаем (затеняем).
+    /// </summary>
+    public async Task<HashSet<int>> OverBudgetEntriesAsync(int auctionId)
+    {
+        var over = new HashSet<int>();
+        var auction = await _db.Auctions.FindAsync(auctionId);
+        if (auction is null) return over;
+
+        var entries = await _db.AuctionEntries.Where(e => e.AuctionId == auctionId).ToListAsync();
+        foreach (var grp in entries.GroupBy(e => e.RoomMemberId))
+        {
+            int avail = await AvailablePointsAsync(grp.Key, auction.Number);
+            int acc = 0;
+            foreach (var e in grp.OrderBy(x => x.Points).ThenBy(x => x.Id)) // дешёвые сначала
+            {
+                if (acc + e.Points <= avail) acc += e.Points;
+                else over.Add(e.Id); // сверх бюджета -> затенить
+            }
+        }
+        return over;
     }
 
     public Task<Auction?> CurrentAuctionAsync(int roomId) =>

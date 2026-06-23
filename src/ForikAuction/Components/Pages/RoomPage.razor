@@ -85,7 +85,7 @@ else
                     @foreach (var e in _entries)
                     {
                         var pct = _totalWeight > 0 ? Weight(e) / _totalWeight * 100 : 0;
-                        <li class="@(_eliminated.Contains(e.Id) ? "out" : "")">
+                        <li class="@(_eliminated.Contains(e.Id) ? "out" : (_overBudget.Contains(e.Id) ? "over" : ""))">
                             <span class="dot" style="background:@ColorFor(e.Id)"></span>
                             <span class="anime">@e.AnimeTitle</span>
                             <span class="owner">@e.RoomMember.User.DisplayName</span>
@@ -93,6 +93,10 @@ else
                             @if (_eliminated.Contains(e.Id))
                             {
                                 <span class="out-tag">выбыл</span>
+                            }
+                            else if (_overBudget.Contains(e.Id))
+                            {
+                                <span class="out-tag warn">не хватает</span>
                             }
                             else
                             {
@@ -152,13 +156,17 @@ else
                         </select>
                     </label>
                     <button class="btn primary big" @onclick="StartSpin"
-                            disabled="@(_entries.Count < 2 || _spinning || _finished || _roomHasPending)">
+                            disabled="@(_entries.Count < 2 || _spinning || _finished || _roomHasPending || _overBudget.Count > 0)">
                         @(_spinning ? "Крутится…" : "Крутить!")
                     </button>
                 </div>
                 @if (_roomHasPending)
                 {
                     <p class="muted">⏳ Нельзя крутить: есть квесты, ожидающие одобрения игроками.</p>
+                }
+                @if (_overBudget.Count > 0)
+                {
+                    <p class="error">Не хватает очков на перенесённые ставки (затенённые «не хватает»). Уберите лишние — иначе колесо крутить нельзя.</p>
                 }
                 @if (_spinBlockedMsg is not null)
                 {
@@ -367,6 +375,7 @@ else
     private bool _spinning, _finished;
     private List<RoomQuest> _pendingApprovals = new();
     private bool _roomHasPending;
+    private HashSet<int> _overBudget = new();
     private string? _spinBlockedMsg;
     private HashSet<int> _eliminated = new();
     private SpinPlan? _pendingResumePlan;
@@ -438,7 +447,8 @@ else
         var palette = new[]{"#ef4444","#f59e0b","#10b981","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f97316"};
         for (int i = 0; i < _entries.Count; i++) _colors[_entries[i].Id] = palette[i % palette.Length];
 
-        _totalWeight = _entries.Sum(Weight);
+        _overBudget = _auction is null ? new() : await Auctions.OverBudgetEntriesAsync(_auction.Id);
+        _totalWeight = _entries.Where(e => !_overBudget.Contains(e.Id)).Sum(Weight);
 
         // доступные очки и разбивка на текущий аукцион
         _avail = new(); _ledgers = new();

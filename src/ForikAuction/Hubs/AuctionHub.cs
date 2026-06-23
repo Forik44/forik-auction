@@ -41,6 +41,12 @@ public class AuctionHub : Hub
             return;
         }
 
+        if ((await _auctions.OverBudgetEntriesAsync(auctionId)).Count > 0)
+        {
+            await Clients.Caller.SendAsync("SpinBlocked", "Кому-то не хватает очков на перенесённые ставки (затенённые). Уберите лишние ставки.");
+            return;
+        }
+
         var result = await _auctions.ComputeWheelAsync(auctionId);
         var byId = segs.ToDictionary(s => s.EntryId);
 

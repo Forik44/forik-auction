@@ -190,3 +190,8 @@ hr{border:none;border-top:1px solid var(--line);margin:18px 0}
 
 /* плавное движение зрачков маскота */
 .mascot .pupil{transition:transform .08s linear}
+
+/* ставки сверх бюджета (перенос с прошлого аукциона) */
+.entries li.over{opacity:.55}
+.entries li.over .anime{color:var(--muted)}
+.out-tag.warn{color:var(--warn);background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.4)}
